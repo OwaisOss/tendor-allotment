@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install expo-print expo-sharing)"
+    ]
+  }
+}
