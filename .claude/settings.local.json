@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install expo-print expo-sharing)"
+      "Bash(npm install expo-print expo-sharing)",
+      "Bash(dir:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
