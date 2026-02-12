@@ -561,6 +561,20 @@ export default function Reports() {
                   Payable: ₹{patti.finalPayable.toFixed(2)}
                 </Text>
               </View>
+
+              {(() => {
+                const fullPatti = allPattis.find(p => p.id === patti.pattiId);
+                if (!fullPatti) return null;
+                return (
+                  <Button
+                    title="Share Bill"
+                    onPress={() => handlePrintFarmerBill(fullPatti)}
+                    variant="success"
+                    style={styles.shareButton}
+                    icon={<AntDesign name="sharealt" size={16} color="white" />}
+                  />
+                );
+              })()}
             </View>
           ))}
 
@@ -1219,5 +1233,8 @@ const styles = StyleSheet.create({
   finalPayableValue: {
     fontSize: 20,
     fontWeight: "700",
+  },
+  shareButton: {
+    marginTop: 8,
   },
 });

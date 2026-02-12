@@ -13,7 +13,7 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { useTheme } from "../context/ThemeContext";
 import { PattiService, StorageService } from "../utils/storage";
-import { PattiRecord, AllotmentRecord } from "../types";
+import { PattiRecord, AllotmentRecord, PattiProduct, BuyerPurchase } from "../types";
 import { useFocusEffect } from "expo-router";
 
 export default function ModifyRecords() {
@@ -24,7 +24,10 @@ export default function ModifyRecords() {
     useState<AllotmentRecord | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [deleteType, setDeleteType] = useState<"patti" | "allotment">("patti");
+  const [editMode, setEditMode] = useState<"expenses" | "item" | "buyer">("expenses");
 
   const [editForm, setEditForm] = useState({
     commissionPercentage: "",
@@ -32,6 +35,24 @@ export default function ModifyRecords() {
     lorryAmount: "",
     cashAmount: "",
     otherExpenses: "",
+  });
+
+  const [selectedProduct, setSelectedProduct] = useState<PattiProduct | null>(null);
+  const [selectedBuyer, setSelectedBuyer] = useState<BuyerPurchase | null>(null);
+  const [selectedProductIndex, setSelectedProductIndex] = useState<number>(-1);
+  const [selectedBuyerIndex, setSelectedBuyerIndex] = useState<number>(-1);
+
+  const [itemForm, setItemForm] = useState({
+    productName: "",
+    totalQuantity: "",
+    rate: "",
+    weight: "",
+  });
+
+  const [buyerForm, setBuyerForm] = useState({
+    buyerName: "",
+    quantity: "",
+    rate: "",
   });
 
   const [pattis, setPattis] = useState<PattiRecord[]>([]);
@@ -83,6 +104,72 @@ export default function ModifyRecords() {
     setShowDeleteModal(true);
   };
 
+  const handleEditItem = (product: PattiProduct, index: number) => {
+    setSelectedProduct(product);
+    setSelectedProductIndex(index);
+    setItemForm({
+      productName: product.productName,
+      totalQuantity: product.totalQuantity.toString(),
+      rate: product.rate.toString(),
+      weight: product.weight.toString(),
+    });
+    setEditMode("item");
+    setShowItemModal(true);
+  };
+
+  const handleAddItem = () => {
+    setSelectedProduct(null);
+    setSelectedProductIndex(-1);
+    setItemForm({
+      productName: "",
+      totalQuantity: "",
+      rate: "",
+      weight: "",
+    });
+    setEditMode("item");
+    setShowItemModal(true);
+  };
+
+  const handleDeleteItem = (index: number) => {
+    if (!selectedPatti) return;
+    const updatedPatti = { ...selectedPatti };
+    updatedPatti.products.splice(index, 1);
+    recalculateAndSave(updatedPatti);
+  };
+
+  const handleEditBuyer = (purchase: BuyerPurchase, productIndex: number, buyerIndex: number) => {
+    setSelectedBuyer(purchase);
+    setSelectedProductIndex(productIndex);
+    setSelectedBuyerIndex(buyerIndex);
+    setBuyerForm({
+      buyerName: purchase.buyerName,
+      quantity: purchase.quantity.toString(),
+      rate: purchase.rate.toString(),
+    });
+    setEditMode("buyer");
+    setShowBuyerModal(true);
+  };
+
+  const handleAddBuyer = (productIndex: number) => {
+    setSelectedBuyer(null);
+    setSelectedProductIndex(productIndex);
+    setSelectedBuyerIndex(-1);
+    setBuyerForm({
+      buyerName: "",
+      quantity: "",
+      rate: "",
+    });
+    setEditMode("buyer");
+    setShowBuyerModal(true);
+  };
+
+  const handleDeleteBuyer = (productIndex: number, buyerIndex: number) => {
+    if (!selectedPatti) return;
+    const updatedPatti = { ...selectedPatti };
+    updatedPatti.products[productIndex].purchases.splice(buyerIndex, 1);
+    recalculateAndSave(updatedPatti);
+  };
+
   const confirmDelete = () => {
     if (deleteType === "patti" && selectedPatti) {
       PattiService.delete(selectedPatti.id);
@@ -100,22 +187,21 @@ export default function ModifyRecords() {
     setSelectedAllotment(null);
   };
 
-  const savePattiChanges = () => {
-    if (!selectedPatti) return;
+  const recalculateAndSave = (updatedPatti: PattiRecord) => {
+    // Recalculate product amounts based on purchases
+    updatedPatti.products.forEach((product) => {
+      let totalAmount = 0;
+      let totalQuantity = 0;
+      product.purchases.forEach((purchase) => {
+        totalAmount += purchase.totalAmount;
+        totalQuantity += purchase.quantity;
+      });
+      product.totalAmount = totalAmount;
+      product.totalQuantity = totalQuantity;
+      product.remainingQuantity = 0; // All allocated to purchases
+    });
 
-    const allPattis = PattiService.getAll();
-    const index = allPattis.findIndex((p) => p.id === selectedPatti.id);
-    if (index === -1) return;
-
-    const updatedPatti = { ...allPattis[index] };
-
-    updatedPatti.commissionPercentage =
-      parseFloat(editForm.commissionPercentage) || 0;
-    updatedPatti.hamalliPerBag = parseFloat(editForm.hamalliPerBag) || 0;
-    updatedPatti.lorryAmount = parseFloat(editForm.lorryAmount) || 0;
-    updatedPatti.cashAmount = parseFloat(editForm.cashAmount) || 0;
-    updatedPatti.otherExpenses = parseFloat(editForm.otherExpenses) || 0;
-
+    // Recalculate patti totals
     let totalBags = 0;
     let totalSales = 0;
     updatedPatti.products.forEach((product) => {
@@ -133,17 +219,120 @@ export default function ModifyRecords() {
       updatedPatti.lorryAmount +
       updatedPatti.cashAmount +
       updatedPatti.otherExpenses;
-    updatedPatti.finalPayableAmount =
-      totalSales - updatedPatti.totalDeductions;
+    updatedPatti.finalPayableAmount = totalSales - updatedPatti.totalDeductions;
     updatedPatti.updatedAt = Date.now();
 
-    allPattis[index] = updatedPatti;
-    PattiService.save(allPattis);
+    // Save to storage
+    const allPattis = PattiService.getAll();
+    const index = allPattis.findIndex((p) => p.id === updatedPatti.id);
+    if (index !== -1) {
+      allPattis[index] = updatedPatti;
+      PattiService.save(allPattis);
+    }
+
+    setSelectedPatti(updatedPatti);
     setPattis(PattiService.getAll());
+  };
+
+  const savePattiChanges = () => {
+    if (!selectedPatti) return;
+
+    const updatedPatti = { ...selectedPatti };
+
+    updatedPatti.commissionPercentage =
+      parseFloat(editForm.commissionPercentage) || 0;
+    updatedPatti.hamalliPerBag = parseFloat(editForm.hamalliPerBag) || 0;
+    updatedPatti.lorryAmount = parseFloat(editForm.lorryAmount) || 0;
+    updatedPatti.cashAmount = parseFloat(editForm.cashAmount) || 0;
+    updatedPatti.otherExpenses = parseFloat(editForm.otherExpenses) || 0;
+
+    recalculateAndSave(updatedPatti);
 
     setShowEditModal(false);
     setSelectedPatti(null);
     Alert.alert("Success", "Patti updated successfully!");
+  };
+
+  const saveItemChanges = () => {
+    if (!selectedPatti) return;
+
+    const updatedPatti = { ...selectedPatti };
+    const productName = itemForm.productName.trim();
+    const totalQuantity = parseFloat(itemForm.totalQuantity) || 0;
+    const rate = parseFloat(itemForm.rate) || 0;
+    const weight = parseFloat(itemForm.weight) || 0;
+
+    if (!productName || totalQuantity <= 0 || rate < 0) {
+      Alert.alert("Error", "Please fill all required fields correctly");
+      return;
+    }
+
+    if (selectedProductIndex === -1) {
+      // Add new item
+      const newProduct: PattiProduct = {
+        productId: `prod_${Date.now()}`,
+        productName,
+        totalQuantity,
+        remainingQuantity: totalQuantity,
+        weight,
+        rate,
+        totalAmount: 0,
+        purchases: [],
+      };
+      updatedPatti.products.push(newProduct);
+    } else {
+      // Edit existing item
+      updatedPatti.products[selectedProductIndex].productName = productName;
+      updatedPatti.products[selectedProductIndex].weight = weight;
+      updatedPatti.products[selectedProductIndex].rate = rate;
+      // Note: totalQuantity and totalAmount are calculated from purchases
+    }
+
+    recalculateAndSave(updatedPatti);
+    setShowItemModal(false);
+    setSelectedProduct(null);
+    Alert.alert("Success", selectedProductIndex === -1 ? "Item added successfully!" : "Item updated successfully!");
+  };
+
+  const saveBuyerChanges = () => {
+    if (!selectedPatti || selectedProductIndex === -1) return;
+
+    const updatedPatti = { ...selectedPatti };
+    const product = updatedPatti.products[selectedProductIndex];
+
+    const buyerName = buyerForm.buyerName.trim();
+    const quantity = parseFloat(buyerForm.quantity) || 0;
+    const rate = parseFloat(buyerForm.rate) || 0;
+
+    if (!buyerName || quantity <= 0 || rate < 0) {
+      Alert.alert("Error", "Please fill all required fields correctly");
+      return;
+    }
+
+    if (selectedBuyerIndex === -1) {
+      // Add new buyer
+      const newPurchase: BuyerPurchase = {
+        id: `purchase_${Date.now()}`,
+        buyerName,
+        quantity,
+        rate,
+        totalAmount: quantity * rate,
+        timestamp: Date.now(),
+      };
+      product.purchases.push(newPurchase);
+    } else {
+      // Edit existing buyer
+      const purchase = product.purchases[selectedBuyerIndex];
+      purchase.buyerName = buyerName;
+      purchase.quantity = quantity;
+      purchase.rate = rate;
+      purchase.totalAmount = quantity * rate;
+    }
+
+    recalculateAndSave(updatedPatti);
+    setShowBuyerModal(false);
+    setSelectedBuyer(null);
+    Alert.alert("Success", selectedBuyerIndex === -1 ? "Buyer added successfully!" : "Buyer updated successfully!");
   };
 
   const renderDateList = () => (
@@ -203,10 +392,46 @@ export default function ModifyRecords() {
             </View>
 
             <View style={styles.recordDetails}>
-              <Text style={styles.subHeader}>Products:</Text>
+              <View style={styles.itemsHeader}>
+                <Text style={styles.subHeader}>Products:</Text>
+                <Button
+                  title="Add"
+                  onPress={() => {
+                    setSelectedPatti(patti);
+                    handleAddItem();
+                  }}
+                  variant="primary"
+                  style={styles.addButton}
+                  icon={<AntDesign name="plus" size={14} color="white" />}
+                />
+              </View>
               {patti.products.map((product, idx) => (
                 <View key={idx} style={styles.productSection}>
-                  <Text style={styles.productName}>{product.productName}</Text>
+                  <View style={styles.productHeader}>
+                    <Text style={styles.productName}>{product.productName}</Text>
+                    <View style={styles.productActions}>
+                      <Button
+                        title="Edit"
+                        onPress={() => {
+                          setSelectedPatti(patti);
+                          handleEditItem(product, idx);
+                        }}
+                        variant="warning"
+                        style={styles.smallButton}
+                        icon={<AntDesign name="edit" size={12} color="white" />}
+                      />
+                      <Button
+                        title="Delete"
+                        onPress={() => {
+                          setSelectedPatti(patti);
+                          handleDeleteItem(idx);
+                        }}
+                        variant="danger"
+                        style={styles.smallButton}
+                        icon={<AntDesign name="delete" size={12} color="white" />}
+                      />
+                    </View>
+                  </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Qty:</Text>
                     <Text style={styles.detailValue}>
@@ -225,12 +450,48 @@ export default function ModifyRecords() {
                   </View>
                   {product.purchases.length > 0 && (
                     <View style={styles.buyersList}>
-                      <Text style={styles.buyersHeader}>Buyers:</Text>
+                      <View style={styles.buyersHeaderRow}>
+                        <Text style={styles.buyersHeader}>Buyers:</Text>
+                        <Button
+                          title="Add"
+                          onPress={() => {
+                            setSelectedPatti(patti);
+                            handleAddBuyer(idx);
+                          }}
+                          variant="primary"
+                          style={styles.addBuyerButton}
+                          icon={<AntDesign name="plus" size={12} color="white" />}
+                        />
+                      </View>
                       {product.purchases.map((purchase, pIdx) => (
-                        <Text key={pIdx} style={styles.buyerItem}>
-                          • {purchase.buyerName}: {purchase.quantity} bags @
-                          ₹{purchase.rate} = ₹{purchase.totalAmount.toFixed(2)}
-                        </Text>
+                        <View key={pIdx} style={styles.buyerItemContainer}>
+                          <Text style={styles.buyerItem}>
+                            • {purchase.buyerName}: {purchase.quantity} bags @
+                            ₹{purchase.rate} = ₹{purchase.totalAmount.toFixed(2)}
+                          </Text>
+                          <View style={styles.buyerItemActions}>
+                            <Button
+                              title="Edit"
+                              onPress={() => {
+                                setSelectedPatti(patti);
+                                handleEditBuyer(purchase, idx, pIdx);
+                              }}
+                              variant="warning"
+                              style={styles.tinyButton}
+                              icon={<AntDesign name="edit" size={10} color="white" />}
+                            />
+                            <Button
+                              title="Delete"
+                              onPress={() => {
+                                setSelectedPatti(patti);
+                                handleDeleteBuyer(idx, pIdx);
+                              }}
+                              variant="danger"
+                              style={styles.tinyButton}
+                              icon={<AntDesign name="delete" size={10} color="white" />}
+                            />
+                          </View>
+                        </View>
                       ))}
                     </View>
                   )}
@@ -458,6 +719,126 @@ export default function ModifyRecords() {
     </Modal>
   );
 
+  const renderItemModal = () => (
+    <Modal
+      visible={showItemModal}
+      onClose={() => setShowItemModal(false)}
+      title={selectedProductIndex === -1 ? "Add Item" : "Edit Item"}
+      actions={[
+        {
+          label: "Cancel",
+          onPress: () => setShowItemModal(false),
+          variant: "secondary",
+        },
+        {
+          label: "Save",
+          onPress: saveItemChanges,
+          variant: "success",
+        },
+      ]}
+    >
+      <ScrollView style={styles.editForm}>
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Product Name</Text>
+          <TextInput
+            style={styles.formInput}
+            value={itemForm.productName}
+            onChangeText={(text) =>
+              setItemForm({ ...itemForm, productName: text })
+            }
+            placeholder="e.g., Wheat"
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Weight</Text>
+          <TextInput
+            style={styles.formInput}
+            value={itemForm.weight}
+            onChangeText={(text) =>
+              setItemForm({ ...itemForm, weight: text })
+            }
+            keyboardType="numeric"
+            placeholder="e.g., 50"
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Rate (₹)</Text>
+          <TextInput
+            style={styles.formInput}
+            value={itemForm.rate}
+            onChangeText={(text) =>
+              setItemForm({ ...itemForm, rate: text })
+            }
+            keyboardType="numeric"
+            placeholder="e.g., 2500"
+          />
+        </View>
+      </ScrollView>
+    </Modal>
+  );
+
+  const renderBuyerModal = () => (
+    <Modal
+      visible={showBuyerModal}
+      onClose={() => setShowBuyerModal(false)}
+      title={selectedBuyerIndex === -1 ? "Add Buyer" : "Edit Buyer"}
+      actions={[
+        {
+          label: "Cancel",
+          onPress: () => setShowBuyerModal(false),
+          variant: "secondary",
+        },
+        {
+          label: "Save",
+          onPress: saveBuyerChanges,
+          variant: "success",
+        },
+      ]}
+    >
+      <ScrollView style={styles.editForm}>
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Buyer Name</Text>
+          <TextInput
+            style={styles.formInput}
+            value={buyerForm.buyerName}
+            onChangeText={(text) =>
+              setBuyerForm({ ...buyerForm, buyerName: text })
+            }
+            placeholder="e.g., John Doe"
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Quantity (bags)</Text>
+          <TextInput
+            style={styles.formInput}
+            value={buyerForm.quantity}
+            onChangeText={(text) =>
+              setBuyerForm({ ...buyerForm, quantity: text })
+            }
+            keyboardType="numeric"
+            placeholder="e.g., 10"
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Rate (₹)</Text>
+          <TextInput
+            style={styles.formInput}
+            value={buyerForm.rate}
+            onChangeText={(text) =>
+              setBuyerForm({ ...buyerForm, rate: text })
+            }
+            keyboardType="numeric"
+            placeholder="e.g., 2500"
+          />
+        </View>
+      </ScrollView>
+    </Modal>
+  );
+
   return (
     <ScrollView style={styles.container}>
       {renderDateList()}
@@ -489,6 +870,8 @@ export default function ModifyRecords() {
       </Modal>
 
       {renderEditModal()}
+      {renderItemModal()}
+      {renderBuyerModal()}
     </ScrollView>
   );
 }
@@ -541,6 +924,15 @@ const styles = StyleSheet.create({
   recordDetails: {
     gap: 6,
   },
+  itemsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  addButton: {
+    minWidth: 80,
+  },
   subHeader: {
     fontSize: 14,
     fontWeight: "600",
@@ -556,11 +948,25 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: "#007bff",
   },
+  productHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
   productName: {
     fontSize: 15,
     fontWeight: "600",
     color: "#007bff",
     marginBottom: 6,
+    flex: 1,
+  },
+  productActions: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  smallButton: {
+    minWidth: 70,
   },
   buyersList: {
     marginTop: 8,
@@ -568,17 +974,39 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#eee",
   },
+  buyersHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
   buyersHeader: {
     fontSize: 13,
     fontWeight: "500",
     color: "#666",
+  },
+  addBuyerButton: {
+    minWidth: 60,
+  },
+  buyerItemContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
     marginBottom: 4,
   },
   buyerItem: {
     fontSize: 12,
     color: "#555",
     marginLeft: 8,
-    marginTop: 2,
+    flex: 1,
+  },
+  buyerItemActions: {
+    flexDirection: "row",
+    gap: 2,
+  },
+  tinyButton: {
+    minWidth: 50,
   },
   detailRow: {
     flexDirection: "row",

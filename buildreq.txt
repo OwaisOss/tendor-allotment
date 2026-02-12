@@ -1,0 +1,9 @@
+watchman watch-del-all
+rm -rf node_modules
+rm -rf android/.gradle
+rm -rf android/build
+rm -rf android/app/build
+npm install
+cd android
+./gradlew clean
+cd ..

@@ -11,7 +11,6 @@ import { useRouter } from "expo-router";
 import { AntDesign } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
-import * as MediaLibrary from "expo-media-library";
 // @ts-ignore
 import Papa from "papaparse";
 import { Card } from "../components/Card";
@@ -215,45 +214,36 @@ export default function Dashboard() {
         return;
       }
 
-      // Request storage permissions
-      try {
-        const permissions = await Promise.all([
-          MediaLibrary.requestPermissionsAsync(),
-          FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(),
-        ]);
+      // Show the Android folder picker via Storage Access Framework
+      const { granted, directoryUri } =
+        await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
 
-        if (permissions.some((p) => !p.granted)) {
-          Alert.alert(
-            "Permission Required",
-            "Please grant permission to save files."
-          );
-          return;
-        }
-      } catch (err) {
-        console.log("Permission request failed, continuing anyway:", err);
+      if (!granted) {
+        Alert.alert(
+          "Permission Required",
+          "Please grant permission to save files."
+        );
+        return;
       }
 
       const currentDate = new Date().toISOString().split("T")[0];
-      const downloadDir = FileSystem.documentDirectory + "Download/";
-
-      // Create Download directory if it doesn't exist
-      const dirInfo = await FileSystem.getInfoAsync(downloadDir);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(downloadDir, {
-          intermediates: true,
-        });
-      }
-
       const exportedFiles: string[] = [];
 
       // Export legacy allotments if any
       if (allotments.length > 0) {
         const allotmentsCsv = formatAllotmentsAsCSV(allotments);
         const allotmentsFilename = `LegacyAllotments_${currentDate}.csv`;
-        const allotmentsUri = downloadDir + allotmentsFilename;
-        await FileSystem.writeAsStringAsync(allotmentsUri, allotmentsCsv, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
+        const allotmentsFileUri =
+          await FileSystem.StorageAccessFramework.createFileAsync(
+            directoryUri,
+            allotmentsFilename,
+            "text/csv"
+          );
+        await FileSystem.StorageAccessFramework.writeAsStringAsync(
+          allotmentsFileUri,
+          allotmentsCsv,
+          { encoding: FileSystem.EncodingType.UTF8 }
+        );
         exportedFiles.push(allotmentsFilename);
       }
 
@@ -261,23 +251,18 @@ export default function Dashboard() {
       if (pattis.length > 0) {
         const pattisCsv = formatPattisAsCSV(pattis);
         const pattisFilename = `Pattis_${currentDate}.csv`;
-        const pattisUri = downloadDir + pattisFilename;
-        await FileSystem.writeAsStringAsync(pattisUri, pattisCsv, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
+        const pattisFileUri =
+          await FileSystem.StorageAccessFramework.createFileAsync(
+            directoryUri,
+            pattisFilename,
+            "text/csv"
+          );
+        await FileSystem.StorageAccessFramework.writeAsStringAsync(
+          pattisFileUri,
+          pattisCsv,
+          { encoding: FileSystem.EncodingType.UTF8 }
+        );
         exportedFiles.push(pattisFilename);
-      }
-
-      // Try to save to media library
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status === "granted") {
-        for (const filename of exportedFiles) {
-          try {
-            await MediaLibrary.saveToLibraryAsync(downloadDir + filename);
-          } catch (err) {
-            console.log(`MediaLibrary save failed for ${filename}:`, err);
-          }
-        }
       }
 
       Alert.alert(

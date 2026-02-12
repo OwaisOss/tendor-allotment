@@ -418,8 +418,8 @@ export default function Allotments() {
         },
         {
           text: "Print Bill",
-          onPress: () => {
-            generateAndShareFarmerBill(
+          onPress: async () => {
+            await generateAndShareFarmerBill(
               finalizedPatti.farmerName,
               finalizedPatti
             );
