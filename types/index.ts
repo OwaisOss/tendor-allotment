@@ -21,6 +21,7 @@ export interface Customer {
 export interface Product {
   label: string;
   value: string;
+  unit?: number;
 }
 
 export interface CustomerReport {
@@ -87,8 +88,9 @@ export interface PattiProduct {
   remainingQuantity: number;   // Available stock
   weight: number;
   rate: number;
-  totalAmount: number;         // Calculated: totalQuantity * weight * rate
+  totalAmount: number;         // Calculated based on unit
   purchases: BuyerPurchase[];
+  unit?: number;               // From items.csv; >0 = weight-based calc
 }
 
 // Patti (Bill) - Main record structure

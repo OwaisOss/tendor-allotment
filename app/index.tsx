@@ -91,6 +91,7 @@ export default function Dashboard() {
               .map((row: any[]) => ({
                 value: row[0]?.toString()?.trim(),
                 label: row[1]?.toString()?.trim(),
+                unit: parseFloat(row[2]?.toString()?.trim()) || 0,
               }))
               .filter((item: any) => item.value && item.label);
 

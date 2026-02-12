@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -75,6 +75,15 @@ export default function Allotments() {
   const [buyerName, setBuyerName] = useState("");
   const [purchaseQty, setPurchaseQty] = useState("");
   const [buyerListKey, setBuyerListKey] = useState(0); // Force refresh when buyers change
+
+  // Product unit (from items.csv)
+  const [selectedProductUnit, setSelectedProductUnit] = useState(0);
+
+  // Input refs for keyboard submit flow
+  const qtyRef = useRef<TextInput>(null);
+  const weightRef = useRef<TextInput>(null);
+  const rateRef = useRef<TextInput>(null);
+  const purchaseQtyRef = useRef<TextInput>(null);
 
   // UI states
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -154,13 +163,18 @@ export default function Allotments() {
   const handleProductSelect = (name: string) => {
     const product = DynamicProductService.findOrCreate(name);
     setProductSearch(product.label);
+    const unit = DynamicProductService.getUnitByLabel(product.label);
+    setSelectedProductUnit(unit);
+    setTimeout(() => qtyRef.current?.focus(), 100);
   };
 
   const handleProductAdd = (name: string) => {
     const product = DynamicProductService.add(name);
     setProductSearch(product.label);
-    setProductListKey((prev) => prev + 1); // Force refresh of product list
+    setProductListKey((prev) => prev + 1);
+    setSelectedProductUnit(0); // Dynamic products default to 0 unit
     Alert.alert("Success", `Product "${name}" added successfully`);
+    setTimeout(() => qtyRef.current?.focus(), 100);
   };
 
   const handleStartFlow = () => {
@@ -180,11 +194,21 @@ export default function Allotments() {
       Alert.alert("Error", "Please enter valid rate");
       return;
     }
+    if (selectedProductUnit > 0 && (!productWeight.trim() || isNaN(parseFloat(productWeight)))) {
+      Alert.alert("Error", "Please enter valid weight");
+      return;
+    }
 
     const product = DynamicProductService.findOrCreate(productSearch);
     const weight = parseFloat(productWeight) || 0;
     const qty = parseFloat(productQty);
     const rate = parseFloat(productRate);
+    const unit = selectedProductUnit;
+
+    // Calculate based on unit
+    const totalAmount = unit > 0
+      ? (weight * qty * rate) / 100
+      : qty * rate;
 
     // Create product entry
     const pattiProduct: PattiProduct = {
@@ -192,10 +216,11 @@ export default function Allotments() {
       productName: product.label,
       totalQuantity: qty,
       remainingQuantity: qty,
-      weight,
+      weight: unit > 0 ? weight : 0,
       rate,
-      totalAmount: qty * weight * rate,
+      totalAmount,
       purchases: [],
+      unit,
     };
 
     // Create or update active patti
@@ -254,12 +279,18 @@ export default function Allotments() {
       setBuyerListKey((prev) => prev + 1); // Force refresh of buyer list
     }
 
+    // Calculate based on unit
+    const productUnit = currentProduct.unit || 0;
+    const purchaseAmount = productUnit > 0
+      ? (currentProduct.weight * qty * currentProduct.rate) / 100
+      : qty * currentProduct.rate;
+
     const purchase: BuyerPurchase = {
       id: `purchase_${Date.now()}`,
       buyerName: buyerNameToUse,
       quantity: qty,
       rate: currentProduct.rate,
-      totalAmount: qty * currentProduct.weight * currentProduct.rate,
+      totalAmount: purchaseAmount,
       timestamp: Date.now(),
     };
 
@@ -291,6 +322,46 @@ export default function Allotments() {
     }
   };
 
+  // ============== SELL ALL ==============
+
+  const handleSellAll = () => {
+    if (!currentProduct || !activePatti) return;
+
+    const remaining = currentProduct.remainingQuantity;
+    if (remaining <= 0) return;
+
+    const productUnit = currentProduct.unit || 0;
+    const purchaseAmount = productUnit > 0
+      ? (currentProduct.weight * remaining * currentProduct.rate) / 100
+      : remaining * currentProduct.rate;
+
+    BuyerService.findOrCreate("Unknown");
+    setBuyerListKey((prev) => prev + 1);
+
+    const purchase: BuyerPurchase = {
+      id: `purchase_${Date.now()}`,
+      buyerName: "Unknown",
+      quantity: remaining,
+      rate: currentProduct.rate,
+      totalAmount: purchaseAmount,
+      timestamp: Date.now(),
+    };
+
+    const result = PattiService.addPurchase(currentProduct.productId, purchase);
+
+    if (result.success) {
+      setActivePatti(result.patti);
+      const updatedProduct = result.patti?.products.find(
+        (p) => p.productId === currentProduct.productId
+      );
+      if (updatedProduct) {
+        setCurrentProduct(updatedProduct);
+        setShowAnotherProductDialog(true);
+        setFlowState(FlowState.OUT_OF_STOCK);
+      }
+    }
+  };
+
   // ============== OUT OF STOCK HANDLING ==============
 
   const handleAnotherProductYes = () => {
@@ -301,6 +372,7 @@ export default function Allotments() {
     setProductQty("");
     setProductWeight("");
     setProductRate("");
+    setSelectedProductUnit(0);
     setCurrentProduct(null);
     setFlowState(FlowState.PRODUCT_SELECTION);
   };
@@ -334,6 +406,7 @@ export default function Allotments() {
       setProductQty("");
       setProductWeight("");
       setProductRate("");
+      setSelectedProductUnit(0);
       setBuyerName("");
       setPurchaseQty("");
       setFlowState(FlowState.FARMER_SELECTION);
@@ -421,6 +494,7 @@ export default function Allotments() {
             setProductQty("");
             setProductWeight("");
             setProductRate("");
+            setSelectedProductUnit(0);
             setBuyerName("");
             setPurchaseQty("");
             setFlowState(FlowState.FARMER_SELECTION);
@@ -579,41 +653,65 @@ export default function Allotments() {
           placeholder="Type to search or add new product"
         />
 
-        <Text style={[styles.label, { color: theme.colors.text }]}>
-          Total Quantity (bags):
-        </Text>
-        <TextInput
-          style={[styles.input, { borderColor: theme.colors.border }]}
-          value={productQty}
-          onChangeText={setProductQty}
-          keyboardType="numeric"
-          placeholder="Enter total stock quantity"
-        />
-
-        <Text style={[styles.label, { color: theme.colors.text }]}>
-          Weight per bag (kg):
-        </Text>
-        <TextInput
-          style={[styles.input, { borderColor: theme.colors.border }]}
-          value={productWeight}
-          onChangeText={setProductWeight}
-          keyboardType="numeric"
-          placeholder="Enter weight per bag"
-        />
-
-        <Text style={[styles.label, { color: theme.colors.text }]}>
-          Rate (₹):
-        </Text>
-        <TextInput
-          style={[styles.input, { borderColor: theme.colors.border }]}
-          value={productRate}
-          onChangeText={setProductRate}
-          keyboardType="numeric"
-          placeholder="Enter rate per bag"
-        />
+        {/* Compact input row: Qty, Weight (if unit>0), Rate */}
+        <View style={styles.compactInputRow}>
+          <View style={styles.compactInputCol}>
+            <Text style={[styles.compactLabel, { color: theme.colors.text }]}>
+              Qty (bags)
+            </Text>
+            <TextInput
+              ref={qtyRef}
+              style={[styles.compactInput, { borderColor: theme.colors.border }]}
+              value={productQty}
+              onChangeText={setProductQty}
+              keyboardType="numeric"
+              placeholder="Bags"
+              returnKeyType="next"
+              onSubmitEditing={() => {
+                if (selectedProductUnit > 0) {
+                  weightRef.current?.focus();
+                } else {
+                  rateRef.current?.focus();
+                }
+              }}
+            />
+          </View>
+          {selectedProductUnit > 0 && (
+            <View style={styles.compactInputCol}>
+              <Text style={[styles.compactLabel, { color: theme.colors.text }]}>
+                Wt (kg)
+              </Text>
+              <TextInput
+                ref={weightRef}
+                style={[styles.compactInput, { borderColor: theme.colors.border }]}
+                value={productWeight}
+                onChangeText={setProductWeight}
+                keyboardType="numeric"
+                placeholder="Kg"
+                returnKeyType="next"
+                onSubmitEditing={() => rateRef.current?.focus()}
+              />
+            </View>
+          )}
+          <View style={styles.compactInputCol}>
+            <Text style={[styles.compactLabel, { color: theme.colors.text }]}>
+              Rate (₹)
+            </Text>
+            <TextInput
+              ref={rateRef}
+              style={[styles.compactInput, { borderColor: theme.colors.border }]}
+              value={productRate}
+              onChangeText={setProductRate}
+              keyboardType="numeric"
+              placeholder="₹"
+              returnKeyType="done"
+              onSubmitEditing={handleStartFlow}
+            />
+          </View>
+        </View>
 
         {/* Calculated Total */}
-        {productQty && productRate && productWeight && (
+        {productQty && productRate && (
           <View
             style={[
               styles.calculatedBox,
@@ -625,10 +723,12 @@ export default function Allotments() {
               style={[styles.calculatedValue, { color: theme.colors.success }]}
             >
               ₹
-              {(
-                parseFloat(productQty) *
-                (parseFloat(productWeight) || 0) *
-                parseFloat(productRate)
+              {(selectedProductUnit > 0
+                ? ((parseFloat(productWeight) || 0) *
+                    parseFloat(productQty) *
+                    parseFloat(productRate)) /
+                  100
+                : parseFloat(productQty) * parseFloat(productRate)
               ).toFixed(2)}
             </Text>
           </View>
@@ -700,8 +800,14 @@ export default function Allotments() {
             label="Buyer Name (Optional):"
             value={buyerName}
             onChangeText={setBuyerName}
-            onSelect={setBuyerName}
-            onAddNew={handleBuyerAdd}
+            onSelect={(name: string) => {
+              setBuyerName(name);
+              setTimeout(() => purchaseQtyRef.current?.focus(), 100);
+            }}
+            onAddNew={(name: string) => {
+              handleBuyerAdd(name);
+              setTimeout(() => purchaseQtyRef.current?.focus(), 100);
+            }}
             options={BuyerService.getAllNames()}
             placeholder="Type buyer name or leave empty"
             allowNew={true}
@@ -711,11 +817,14 @@ export default function Allotments() {
             Purchase Quantity (bags):
           </Text>
           <TextInput
+            ref={purchaseQtyRef}
             style={[styles.input, { borderColor: theme.colors.border }]}
             value={purchaseQty}
             onChangeText={setPurchaseQty}
             keyboardType="numeric"
             placeholder={`Max ${currentProduct.remainingQuantity} bags`}
+            returnKeyType="done"
+            onSubmitEditing={handleAddPurchase}
           />
 
           {purchaseQty && (
@@ -733,10 +842,12 @@ export default function Allotments() {
                 ]}
               >
                 ₹
-                {(
-                  parseFloat(purchaseQty) *
-                  currentProduct.weight *
-                  currentProduct.rate
+                {((currentProduct.unit || 0) > 0
+                  ? (currentProduct.weight *
+                      parseFloat(purchaseQty) *
+                      currentProduct.rate) /
+                    100
+                  : parseFloat(purchaseQty) * currentProduct.rate
                 ).toFixed(2)}
               </Text>
             </View>
@@ -747,6 +858,13 @@ export default function Allotments() {
             onPress={handleAddPurchase}
             style={styles.addButton}
             icon={<AntDesign name="plus" size={20} color="white" />}
+          />
+          <Button
+            title="Sell All"
+            onPress={handleSellAll}
+            variant="warning"
+            style={styles.sellAllButton}
+            icon={<AntDesign name="shoppingcart" size={20} color="white" />}
           />
         </View>
       </Card>
@@ -1019,6 +1137,31 @@ const styles = StyleSheet.create({
   },
   addButton: {
     marginTop: 16,
+  },
+  sellAllButton: {
+    marginTop: 8,
+  },
+  compactInputRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  compactInputCol: {
+    flex: 1,
+  },
+  compactLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  compactInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    backgroundColor: "#fff",
+    minHeight: 44,
   },
   finishButton: {
     marginTop: 16,

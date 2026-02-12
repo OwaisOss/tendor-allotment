@@ -245,6 +245,26 @@ export const DynamicProductService = {
     return Array.from(uniqueLabels);
   },
 
+  // Get unit value for a product by label (checks CSV then dynamic)
+  getUnitByLabel: (label: string): number => {
+    const labelLower = label.trim().toLowerCase();
+    const legacyProducts = StorageService.getProducts();
+    const legacyMatch = legacyProducts.find(
+      (p) => p.label.toLowerCase() === labelLower
+    );
+    if (legacyMatch && legacyMatch.unit !== undefined) {
+      return legacyMatch.unit;
+    }
+    const dynamicProducts = DynamicProductService.getAll();
+    const dynamicMatch = dynamicProducts.find(
+      (p) => p.label.toLowerCase() === labelLower
+    );
+    if (dynamicMatch && dynamicMatch.unit !== undefined) {
+      return dynamicMatch.unit;
+    }
+    return 0;
+  },
+
   // Combined with legacy products
   getAllForDropdown: (): Product[] => {
     const legacy = StorageService.getProducts();
