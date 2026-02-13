@@ -47,13 +47,13 @@ export default function Allotments() {
 
   // Current flow state
   const [flowState, setFlowState] = useState<FlowState>(
-    FlowState.FARMER_SELECTION
+    FlowState.FARMER_SELECTION,
   );
 
   // Active patti
   const [activePatti, setActivePatti] = useState<PattiRecord | null>(null);
   const [currentProduct, setCurrentProduct] = useState<PattiProduct | null>(
-    null
+    null,
   );
 
   // Farmer selection
@@ -106,7 +106,7 @@ export default function Allotments() {
   useFocusEffect(
     useCallback(() => {
       loadActivePatti();
-    }, [])
+    }, []),
   );
 
   const loadActivePatti = () => {
@@ -117,7 +117,7 @@ export default function Allotments() {
 
       // Check if there's a current product being worked on (not fully sold)
       const incompleteProduct = patti.products.find(
-        (p) => p.remainingQuantity > 0
+        (p) => p.remainingQuantity > 0,
       );
       if (incompleteProduct) {
         setCurrentProduct(incompleteProduct);
@@ -194,7 +194,10 @@ export default function Allotments() {
       Alert.alert("Error", "Please enter valid rate");
       return;
     }
-    if (selectedProductUnit > 0 && (!productWeight.trim() || isNaN(parseFloat(productWeight)))) {
+    if (
+      selectedProductUnit > 0 &&
+      (!productWeight.trim() || isNaN(parseFloat(productWeight)))
+    ) {
       Alert.alert("Error", "Please enter valid weight");
       return;
     }
@@ -206,9 +209,7 @@ export default function Allotments() {
     const unit = selectedProductUnit;
 
     // Calculate based on unit
-    const totalAmount = unit > 0
-      ? (weight * qty * rate) / 100
-      : qty * rate;
+    const totalAmount = unit > 0 ? (weight * qty * rate) / 100 : qty * rate;
 
     // Create product entry
     const pattiProduct: PattiProduct = {
@@ -229,7 +230,7 @@ export default function Allotments() {
       patti = PattiService.create(
         selectedFarmer.id,
         selectedFarmer.name,
-        pattiProduct
+        pattiProduct,
       );
     } else {
       PattiService.addProduct(pattiProduct);
@@ -267,7 +268,7 @@ export default function Allotments() {
     if (qty > currentProduct.remainingQuantity) {
       Alert.alert(
         "Error",
-        `Only ${currentProduct.remainingQuantity} bags remaining`
+        `Only ${currentProduct.remainingQuantity} bags remaining`,
       );
       return;
     }
@@ -281,9 +282,10 @@ export default function Allotments() {
 
     // Calculate based on unit
     const productUnit = currentProduct.unit || 0;
-    const purchaseAmount = productUnit > 0
-      ? (currentProduct.weight * qty * currentProduct.rate) / 100
-      : qty * currentProduct.rate;
+    const purchaseAmount =
+      productUnit > 0
+        ? (currentProduct.weight * qty * currentProduct.rate) / 100
+        : qty * currentProduct.rate;
 
     const purchase: BuyerPurchase = {
       id: `purchase_${Date.now()}`,
@@ -301,7 +303,7 @@ export default function Allotments() {
 
       // Find updated product
       const updatedProduct = result.patti?.products.find(
-        (p) => p.productId === currentProduct.productId
+        (p) => p.productId === currentProduct.productId,
       );
 
       if (updatedProduct) {
@@ -331,9 +333,10 @@ export default function Allotments() {
     if (remaining <= 0) return;
 
     const productUnit = currentProduct.unit || 0;
-    const purchaseAmount = productUnit > 0
-      ? (currentProduct.weight * remaining * currentProduct.rate) / 100
-      : remaining * currentProduct.rate;
+    const purchaseAmount =
+      productUnit > 0
+        ? (currentProduct.weight * remaining * currentProduct.rate) / 100
+        : remaining * currentProduct.rate;
 
     BuyerService.findOrCreate("Unknown");
     setBuyerListKey((prev) => prev + 1);
@@ -352,7 +355,7 @@ export default function Allotments() {
     if (result.success) {
       setActivePatti(result.patti);
       const updatedProduct = result.patti?.products.find(
-        (p) => p.productId === currentProduct.productId
+        (p) => p.productId === currentProduct.productId,
       );
       if (updatedProduct) {
         setCurrentProduct(updatedProduct);
@@ -421,7 +424,7 @@ export default function Allotments() {
           onPress: async () => {
             await generateAndShareFarmerBill(
               finalizedPatti.farmerName,
-              finalizedPatti
+              finalizedPatti,
             );
             router.push("/");
           },
@@ -441,7 +444,7 @@ export default function Allotments() {
       if (finalizedPatti) {
         await generateAndShareFarmerBill(
           finalizedPatti.farmerName,
-          finalizedPatti
+          finalizedPatti,
         );
       }
     }
@@ -500,7 +503,7 @@ export default function Allotments() {
             setFlowState(FlowState.FARMER_SELECTION);
           },
         },
-      ]
+      ],
     );
   };
 
@@ -661,7 +664,10 @@ export default function Allotments() {
             </Text>
             <TextInput
               ref={qtyRef}
-              style={[styles.compactInput, { borderColor: theme.colors.border }]}
+              style={[
+                styles.compactInput,
+                { borderColor: theme.colors.border },
+              ]}
               value={productQty}
               onChangeText={setProductQty}
               keyboardType="numeric"
@@ -683,7 +689,10 @@ export default function Allotments() {
               </Text>
               <TextInput
                 ref={weightRef}
-                style={[styles.compactInput, { borderColor: theme.colors.border }]}
+                style={[
+                  styles.compactInput,
+                  { borderColor: theme.colors.border },
+                ]}
                 value={productWeight}
                 onChangeText={setProductWeight}
                 keyboardType="numeric"
@@ -699,7 +708,10 @@ export default function Allotments() {
             </Text>
             <TextInput
               ref={rateRef}
-              style={[styles.compactInput, { borderColor: theme.colors.border }]}
+              style={[
+                styles.compactInput,
+                { borderColor: theme.colors.border },
+              ]}
               value={productRate}
               onChangeText={setProductRate}
               keyboardType="numeric"
@@ -876,11 +888,11 @@ export default function Allotments() {
 
     const totalSold = activePatti.products.reduce(
       (sum, p) => sum + (p.totalQuantity - p.remainingQuantity),
-      0
+      0,
     );
     const totalStock = activePatti.products.reduce(
       (sum, p) => sum + p.totalQuantity,
-      0
+      0,
     );
 
     return (
@@ -914,7 +926,7 @@ export default function Allotments() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} keyboardShouldPersistTaps="handled">
         {/* Progress Indicator */}
         <View style={styles.progressBar}>
           <View
