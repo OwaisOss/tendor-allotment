@@ -1,6 +1,12 @@
-import React, { useState, useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { Dropdown } from "react-native-element-dropdown";
+import React, { useState, useMemo, useRef } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+} from "react-native";
 import { useTheme } from "../context/ThemeContext";
 
 interface SearchableInputProps {
@@ -29,6 +35,7 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
   const [isFocus, setIsFocus] = useState(false);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync searchQuery with value when not focused
   React.useEffect(() => {
@@ -45,7 +52,7 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
     if (searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase();
       filteredOptions = options.filter((option) =>
-        option.toLowerCase().includes(searchLower)
+        option.toLowerCase().includes(searchLower),
       );
     }
 
@@ -58,10 +65,10 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
     // Add "Add New" option if applicable
     if (allowNew && searchQuery.trim()) {
       const exactMatch = options.find(
-        (opt) => opt.toLowerCase() === searchQuery.trim().toLowerCase()
+        (opt) => opt.toLowerCase() === searchQuery.trim().toLowerCase(),
       );
 
-      if (!exactMatch && filteredOptions.length === 0) {
+      if (!exactMatch) {
         data.push({
           label: `+ Add "${searchQuery.trim()}"`,
           value: `__ADD_NEW__${searchQuery.trim()}`,
@@ -73,6 +80,12 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
   }, [options, searchQuery, allowNew]);
 
   const handleChange = (item: { label: string; value: string }) => {
+    // Cancel any pending blur so it doesn't interfere after selection
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+
     // Check if it's "Add New" item
     if (item.value.startsWith("__ADD_NEW__")) {
       const newValue = item.value.replace("__ADD_NEW__", "");
@@ -94,79 +107,83 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
   };
 
   const handleFocus = () => {
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
     setIsFocus(true);
     setSearchQuery(value);
   };
 
   const handleBlur = () => {
-    setIsFocus(false);
+    // Delay blur to allow item press to register
+    blurTimeoutRef.current = setTimeout(() => {
+      setIsFocus(false);
 
-    // Auto-select first filtered result on blur if no exact match
-    if (searchQuery.trim() && dropdownData.length > 0) {
-      const exactMatch = options.find(
-        (opt) => opt.toLowerCase() === searchQuery.trim().toLowerCase()
-      );
+      // Auto-select first filtered result on blur if no exact match
+      if (searchQuery.trim() && dropdownData.length > 0) {
+        const exactMatch = options.find(
+          (opt) => opt.toLowerCase() === searchQuery.trim().toLowerCase(),
+        );
 
-      if (!exactMatch && !dropdownData[0].value.startsWith("__ADD_NEW__")) {
-        onChangeText(dropdownData[0].value);
-        onSelect(dropdownData[0].value);
-        setSearchQuery(dropdownData[0].value);
+        if (!exactMatch && !dropdownData[0].value.startsWith("__ADD_NEW__")) {
+          onChangeText(dropdownData[0].value);
+          onSelect(dropdownData[0].value);
+          setSearchQuery(dropdownData[0].value);
+        }
       }
-    }
 
-    // Keep the search query in sync with the current value
-    if (value && !searchQuery) {
-      setSearchQuery(value);
-    }
+      // Keep the search query in sync with the current value
+      if (value && !searchQuery) {
+        setSearchQuery(value);
+      }
+    }, 150);
   };
 
-  // Render each dropdown item
-  const renderItem = (
-    item: { label: string; value: string },
-    selected?: boolean
-  ) => {
-    const isAddNew = item.value.startsWith("__ADD_NEW__");
-
-    return (
-      <View style={[styles.item, isAddNew && styles.addNewItem]}>
-        <Text style={[styles.itemText, isAddNew && styles.addNewText]}>
-          {item.label}
-        </Text>
-      </View>
-    );
-  };
+  const showList = isFocus && dropdownData.length > 0;
 
   return (
     <View style={[styles.container, containerStyle]}>
       {label && (
-        <Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text>
+        <Text style={[styles.label, { color: theme.colors.text }]}>
+          {label}
+        </Text>
       )}
-      <Dropdown
-        style={[styles.dropdown, isFocus && styles.dropdownFocused]}
-        placeholderStyle={styles.placeholderStyle}
-        selectedTextStyle={styles.selectedTextStyle}
-        inputSearchStyle={styles.inputSearchStyle}
-        iconStyle={styles.iconStyle}
-        containerStyle={styles.dropdownContainer}
-        activeColor="#f0f0f0"
-        data={dropdownData}
-        search
-        maxHeight={250}
-        labelField="label"
-        valueField="value"
-        placeholder={placeholder}
-        searchPlaceholder="Search..."
-        value={value}
+      <TextInput
+        style={[styles.textInput, isFocus && styles.textInputFocused]}
+        value={searchQuery}
+        onChangeText={handleSearch}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        onChange={handleChange}
-        onChangeText={handleSearch}
-        renderItem={renderItem}
-        autoScroll={false}
-        flatListProps={{
-          keyboardShouldPersistTaps: "handled",
-        }}
+        placeholder={placeholder}
+        placeholderTextColor="#94A3B8"
       />
+      {showList && (
+        <ScrollView
+          style={styles.listContainer}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
+          {dropdownData.map((item, index) => {
+            const isAddNew = item.value.startsWith("__ADD_NEW__");
+            return (
+              <TouchableOpacity
+                key={`${item.value}-${index}`}
+                activeOpacity={0.6}
+                onPress={() => handleChange(item)}
+              >
+                <View style={[styles.item, isAddNew && styles.addNewItem]}>
+                  <Text
+                    style={[styles.itemText, isAddNew && styles.addNewText]}
+                  >
+                    {item.label}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -174,6 +191,7 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
+    zIndex: 1,
   },
   label: {
     fontSize: 14,
@@ -181,58 +199,33 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     color: "#475569", // Slate 600
   },
-  dropdown: {
+  textInput: {
     height: 50,
     borderWidth: 1,
     borderColor: "#E2E8F0", // Slate 200
     borderRadius: 12,
     paddingHorizontal: 16,
     backgroundColor: "#fff",
+    fontSize: 15,
+    color: "#0F172A", // Slate 900
   },
-  dropdownFocused: {
+  textInputFocused: {
     borderColor: "#2563EB",
     borderWidth: 2,
   },
-  iconStyle: {
-    width: 20,
-    height: 20,
-    tintColor: "#64748B",
-  },
-  dropdownContainer: {
+  listContainer: {
     backgroundColor: "#fff",
     borderRadius: 12,
-    marginTop: 8,
+    marginTop: 4,
     shadowColor: "#64748B",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 4,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     overflow: "hidden",
-  },
-  placeholderStyle: {
-    fontSize: 15,
-    color: "#94A3B8", // Slate 400
-  },
-  selectedTextStyle: {
-    fontSize: 15,
-    color: "#0F172A", // Slate 900
-    fontWeight: "500",
-  },
-  inputSearchStyle: {
-    height: 44,
-    fontSize: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingHorizontal: 12,
-    margin: 8,
-    color: "#0F172A",
-    backgroundColor: "#F8FAFC",
+    maxHeight: 250,
   },
   item: {
     paddingVertical: 12,
