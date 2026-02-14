@@ -52,7 +52,7 @@ export default function Reports() {
 
   // Modal states
   const [selectedFarmer, setSelectedFarmer] = useState<FarmerReport | null>(
-    null
+    null,
   );
   const [selectedPatti, setSelectedPatti] = useState<PattiRecord | null>(null);
   const [showFarmerModal, setShowFarmerModal] = useState(false);
@@ -114,7 +114,8 @@ export default function Reports() {
                     {report.farmerName}
                   </Text>
                   <Text style={styles.reportSubtitle}>
-                    {report.totalPattis} pattis • {report.totalProducts} products
+                    {report.totalPattis} pattis • {report.totalProducts}{" "}
+                    products
                   </Text>
                 </View>
                 <View style={styles.reportStats}>
@@ -126,9 +127,7 @@ export default function Reports() {
                   >
                     ₹{report.totalSales.toFixed(2)}
                   </Text>
-                  <Text style={styles.reportBags}>
-                    {report.totalBags} bags
-                  </Text>
+                  <Text style={styles.reportBags}>{report.totalBags} bags</Text>
                 </View>
               </View>
 
@@ -136,7 +135,10 @@ export default function Reports() {
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Commission:</Text>
                   <Text
-                    style={[styles.summaryValue, { color: theme.colors.danger }]}
+                    style={[
+                      styles.summaryValue,
+                      { color: theme.colors.danger },
+                    ]}
                   >
                     ₹{report.totalCommission.toFixed(2)}
                   </Text>
@@ -144,7 +146,10 @@ export default function Reports() {
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Payable:</Text>
                   <Text
-                    style={[styles.summaryValue, { color: theme.colors.primary }]}
+                    style={[
+                      styles.summaryValue,
+                      { color: theme.colors.primary },
+                    ]}
                   >
                     ₹{report.totalPayable.toFixed(2)}
                   </Text>
@@ -201,9 +206,7 @@ export default function Reports() {
                   >
                     ₹{report.totalAmount.toFixed(2)}
                   </Text>
-                  <Text style={styles.reportBags}>
-                    {report.totalBags} bags
-                  </Text>
+                  <Text style={styles.reportBags}>{report.totalBags} bags</Text>
                 </View>
               </View>
             </Card>
@@ -265,7 +268,10 @@ export default function Reports() {
               <View style={styles.breakdownRow}>
                 <Text style={styles.breakdownLabel}>Commission:</Text>
                 <Text
-                  style={[styles.breakdownValue, { color: theme.colors.danger }]}
+                  style={[
+                    styles.breakdownValue,
+                    { color: theme.colors.danger },
+                  ]}
                 >
                   ₹{summary.totalCommission.toFixed(2)}
                 </Text>
@@ -308,7 +314,10 @@ export default function Reports() {
   // ============== COMMISSION REPORT ==============
 
   const renderCommissionReport = () => {
-    if (!commissionReport || commissionReport.pattisWithCommission.length === 0) {
+    if (
+      !commissionReport ||
+      commissionReport.pattisWithCommission.length === 0
+    ) {
       return (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No commission data available</Text>
@@ -329,9 +338,7 @@ export default function Reports() {
           <Card key={patti.pattiId} style={styles.reportCard}>
             <View style={styles.commissionHeader}>
               <View>
-                <Text
-                  style={[styles.reportName, { color: theme.colors.text }]}
-                >
+                <Text style={[styles.reportName, { color: theme.colors.text }]}>
                   {patti.farmerName}
                 </Text>
                 <Text style={styles.reportSubtitle}>
@@ -340,10 +347,7 @@ export default function Reports() {
               </View>
               <View style={styles.reportStats}>
                 <Text
-                  style={[
-                    styles.reportAmount,
-                    { color: theme.colors.success },
-                  ]}
+                  style={[styles.reportAmount, { color: theme.colors.success }]}
                 >
                   ₹{patti.commissionAmount.toFixed(2)}
                 </Text>
@@ -380,9 +384,7 @@ export default function Reports() {
           <Card key={product.productId} style={styles.reportCard}>
             <View style={styles.reportHeader}>
               <View>
-                <Text
-                  style={[styles.reportName, { color: theme.colors.text }]}
-                >
+                <Text style={[styles.reportName, { color: theme.colors.text }]}>
                   {product.productName}
                 </Text>
                 <Text style={styles.reportSubtitle}>
@@ -391,10 +393,7 @@ export default function Reports() {
               </View>
               <View style={styles.reportStats}>
                 <Text
-                  style={[
-                    styles.reportAmount,
-                    { color: theme.colors.primary },
-                  ]}
+                  style={[styles.reportAmount, { color: theme.colors.primary }]}
                 >
                   ₹{product.totalAmount.toFixed(2)}
                 </Text>
@@ -443,7 +442,7 @@ export default function Reports() {
 
     // Sort by date descending
     const sortedPattis = [...allPattis].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
     return (
@@ -462,8 +461,8 @@ export default function Reports() {
                     {patti.farmerName}
                   </Text>
                   <Text style={styles.reportSubtitle}>
-                    {new Date(patti.date).toDateString()} • {patti.products.length}{" "}
-                    products
+                    {new Date(patti.date).toDateString()} •{" "}
+                    {patti.products.length} products
                   </Text>
                 </View>
                 <View style={styles.reportStats}>
@@ -492,10 +491,7 @@ export default function Reports() {
                   Deductions: ₹{patti.totalDeductions.toFixed(2)}
                 </Text>
                 <Text
-                  style={[
-                    styles.pattiPayable,
-                    { color: theme.colors.primary },
-                  ]}
+                  style={[styles.pattiPayable, { color: theme.colors.primary }]}
                 >
                   Payable: ₹{patti.finalPayableAmount.toFixed(2)}
                 </Text>
@@ -563,7 +559,7 @@ export default function Reports() {
               </View>
 
               {(() => {
-                const fullPatti = allPattis.find(p => p.id === patti.pattiId);
+                const fullPatti = allPattis.find((p) => p.id === patti.pattiId);
                 if (!fullPatti) return null;
                 return (
                   <Button
@@ -670,11 +666,12 @@ export default function Reports() {
           </Text>
 
           <Text style={styles.modalSectionTitle}>Products</Text>
-          {selectedPatti.products.map((product) => (
-            <View key={product.productId} style={styles.pattiProductCard}>
-              <Text style={styles.pattiProductName}>
-                {product.productName}
-              </Text>
+          {selectedPatti.products.map((product, idx) => (
+            <View
+              key={product.entryId || `${product.productId}_${idx}`}
+              style={styles.pattiProductCard}
+            >
+              <Text style={styles.pattiProductName}>{product.productName}</Text>
               <Text style={styles.pattiProductDetails}>
                 Total: {product.totalQuantity} bags • Remaining:{" "}
                 {product.remainingQuantity} bags
@@ -691,9 +688,8 @@ export default function Reports() {
                   <Text style={styles.purchasesTitle}>Purchases:</Text>
                   {product.purchases.map((purchase) => (
                     <Text key={purchase.id} style={styles.purchaseDetail}>
-                      • {purchase.buyerName || "Anonymous"}:{" "}
-                      {purchase.quantity} bags = ₹
-                      {purchase.totalAmount.toFixed(2)}
+                      • {purchase.buyerName || "Anonymous"}: {purchase.quantity}{" "}
+                      bags = ₹{purchase.totalAmount.toFixed(2)}
                     </Text>
                   ))}
                 </View>

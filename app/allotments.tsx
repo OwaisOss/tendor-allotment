@@ -213,6 +213,7 @@ export default function Allotments() {
 
     // Create product entry
     const pattiProduct: PattiProduct = {
+      entryId: `entry_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       productId: product.value,
       productName: product.label,
       totalQuantity: qty,
@@ -296,14 +297,17 @@ export default function Allotments() {
       timestamp: Date.now(),
     };
 
-    const result = PattiService.addPurchase(currentProduct.productId, purchase);
+    const lookupId = currentProduct.entryId || currentProduct.productId;
+    const result = PattiService.addPurchase(lookupId, purchase);
 
     if (result.success) {
       setActivePatti(result.patti);
 
-      // Find updated product
-      const updatedProduct = result.patti?.products.find(
-        (p) => p.productId === currentProduct.productId,
+      // Find updated product by entryId (fallback to productId for old data)
+      const updatedProduct = result.patti?.products.find((p) =>
+        currentProduct.entryId
+          ? p.entryId === currentProduct.entryId
+          : p.productId === currentProduct.productId,
       );
 
       if (updatedProduct) {
@@ -350,12 +354,15 @@ export default function Allotments() {
       timestamp: Date.now(),
     };
 
-    const result = PattiService.addPurchase(currentProduct.productId, purchase);
+    const sellAllLookupId = currentProduct.entryId || currentProduct.productId;
+    const result = PattiService.addPurchase(sellAllLookupId, purchase);
 
     if (result.success) {
       setActivePatti(result.patti);
-      const updatedProduct = result.patti?.products.find(
-        (p) => p.productId === currentProduct.productId,
+      const updatedProduct = result.patti?.products.find((p) =>
+        currentProduct.entryId
+          ? p.entryId === currentProduct.entryId
+          : p.productId === currentProduct.productId,
       );
       if (updatedProduct) {
         setCurrentProduct(updatedProduct);

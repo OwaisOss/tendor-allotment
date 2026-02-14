@@ -48,15 +48,15 @@ export const ProfileService = {
 
   getProfile: (): AppProfile => {
     const data = storage.getString(STORAGE_KEYS.PROFILE);
-    return (
-      data ? JSON.parse(data) : {
-        defaultCommissionPercentage: 2,
-        defaultHamalliPerBag: 2,
-        defaultLorryAmount: 0,
-        defaultCashAmount: 0,
-        defaultOtherExpenses: 0,
-      }
-    );
+    return data
+      ? JSON.parse(data)
+      : {
+          defaultCommissionPercentage: 2,
+          defaultHamalliPerBag: 2,
+          defaultLorryAmount: 0,
+          defaultCashAmount: 0,
+          defaultOtherExpenses: 0,
+        };
   },
 
   getDefaultExpenses: () => {
@@ -98,7 +98,7 @@ export const FarmerService = {
   findOrCreate: (name: string): Farmer => {
     const farmers = FarmerService.getAll();
     const existing = farmers.find(
-      (f) => f.name.toLowerCase() === name.trim().toLowerCase()
+      (f) => f.name.toLowerCase() === name.trim().toLowerCase(),
     );
     if (existing) return existing;
     return FarmerService.add(name);
@@ -112,7 +112,7 @@ export const FarmerService = {
     const farmers = FarmerService.getAll();
     if (!query.trim()) return farmers;
     return farmers.filter((f) =>
-      f.name.toLowerCase().includes(query.trim().toLowerCase())
+      f.name.toLowerCase().includes(query.trim().toLowerCase()),
     );
   },
 
@@ -148,7 +148,7 @@ export const BuyerService = {
   findOrCreate: (name: string): Buyer => {
     const buyers = BuyerService.getAll();
     const existing = buyers.find(
-      (b) => b.name.toLowerCase() === name.trim().toLowerCase()
+      (b) => b.name.toLowerCase() === name.trim().toLowerCase(),
     );
     if (existing) return existing;
     return BuyerService.add(name);
@@ -156,7 +156,7 @@ export const BuyerService = {
 
   findByName: (name: string): Buyer | undefined => {
     return BuyerService.getAll().find(
-      (b) => b.name.toLowerCase() === name.trim().toLowerCase()
+      (b) => b.name.toLowerCase() === name.trim().toLowerCase(),
     );
   },
 
@@ -164,7 +164,7 @@ export const BuyerService = {
     const buyers = BuyerService.getAll();
     if (!query.trim()) return buyers;
     return buyers.filter((b) =>
-      b.name.toLowerCase().includes(query.trim().toLowerCase())
+      b.name.toLowerCase().includes(query.trim().toLowerCase()),
     );
   },
 
@@ -199,7 +199,7 @@ export const DynamicProductService = {
   findOrCreate: (name: string): Product => {
     const products = DynamicProductService.getAll();
     const existing = products.find(
-      (p) => p.label.toLowerCase() === name.trim().toLowerCase()
+      (p) => p.label.toLowerCase() === name.trim().toLowerCase(),
     );
     if (existing) return existing;
     return DynamicProductService.add(name);
@@ -213,7 +213,7 @@ export const DynamicProductService = {
     const products = DynamicProductService.getAll();
     if (!query.trim()) return products;
     return products.filter((p) =>
-      p.label.toLowerCase().includes(query.trim().toLowerCase())
+      p.label.toLowerCase().includes(query.trim().toLowerCase()),
     );
   },
 
@@ -235,7 +235,7 @@ export const DynamicProductService = {
         const lowerLabel = label.toLowerCase();
         // Check if we already have this label (case-insensitive)
         const exists = Array.from(uniqueLabels).some(
-          (existing) => existing.toLowerCase() === lowerLabel
+          (existing) => existing.toLowerCase() === lowerLabel,
         );
         if (!exists) {
           uniqueLabels.add(label);
@@ -250,14 +250,14 @@ export const DynamicProductService = {
     const labelLower = label.trim().toLowerCase();
     const legacyProducts = StorageService.getProducts();
     const legacyMatch = legacyProducts.find(
-      (p) => p.label.toLowerCase() === labelLower
+      (p) => p.label.toLowerCase() === labelLower,
     );
     if (legacyMatch && legacyMatch.unit !== undefined) {
       return legacyMatch.unit;
     }
     const dynamicProducts = DynamicProductService.getAll();
     const dynamicMatch = dynamicProducts.find(
-      (p) => p.label.toLowerCase() === labelLower
+      (p) => p.label.toLowerCase() === labelLower,
     );
     if (dynamicMatch && dynamicMatch.unit !== undefined) {
       return dynamicMatch.unit;
@@ -310,7 +310,7 @@ export const PattiService = {
   create: (
     farmerId: string,
     farmerName: string,
-    product: PattiProduct
+    product: PattiProduct,
   ): PattiRecord => {
     const profile = ProfileService.getProfile();
     const now = Date.now();
@@ -353,13 +353,16 @@ export const PattiService = {
 
   // Add purchase to a product in active patti
   addPurchase: (
-    productId: string,
-    purchase: BuyerPurchase
+    entryIdOrProductId: string,
+    purchase: BuyerPurchase,
   ): { success: boolean; remaining: number; patti: PattiRecord | null } => {
     const active = PattiService.getActive();
     if (!active) return { success: false, remaining: 0, patti: null };
 
-    const product = active.products.find((p) => p.productId === productId);
+    // Find by entryId first, fallback to productId for backward compatibility
+    const product =
+      active.products.find((p) => p.entryId === entryIdOrProductId) ||
+      active.products.find((p) => p.productId === entryIdOrProductId);
     if (!product) return { success: false, remaining: 0, patti: null };
 
     if (product.remainingQuantity < purchase.quantity) {
@@ -503,7 +506,7 @@ export const ReportService = {
         totalProducts += patti.products.length;
         const pattiBags = patti.products.reduce(
           (sum, p) => sum + p.totalQuantity,
-          0
+          0,
         );
         totalBags += pattiBags;
         totalSales += patti.totalPattiAmount;
@@ -570,7 +573,7 @@ export const ReportService = {
         totalBags,
         totalAmount,
         purchases: purchases.sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
         ),
       };
     });
@@ -664,13 +667,13 @@ export const ReportService = {
 
     const totalCommission = pattis.reduce(
       (sum, p) => sum + p.commissionAmount,
-      0
+      0,
     );
 
     return {
       totalCommission,
       pattisWithCommission: pattisWithCommission.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       ),
     };
   },
@@ -736,7 +739,7 @@ export const ReportService = {
           farmerName: f.name,
           quantity: f.qty,
           amount: f.amt,
-        })
+        }),
       ),
     }));
   },
@@ -935,7 +938,7 @@ export const StorageService = {
       report.totalAmount += allotment.totalAmount;
 
       const itemIndex = report.itemsPurchased.findIndex(
-        (i) => i.productId === allotment.productId
+        (i) => i.productId === allotment.productId,
       );
       if (itemIndex === -1) {
         report.itemsPurchased.push({
@@ -973,7 +976,7 @@ export const StorageService = {
       report.totalAmount += allotment.totalAmount;
 
       const customerIndex = report.customers.findIndex(
-        (c) => c.customerId === allotment.customerId
+        (c) => c.customerId === allotment.customerId,
       );
       if (customerIndex === -1) {
         report.customers.push({
@@ -1038,7 +1041,7 @@ export const StorageService = {
             allotments.find((a) => a.productId === productId)?.productName ||
             "",
           totalBags: stat.totalBags,
-        })
+        }),
       ),
       totalAmountPerItem: Array.from(itemStats.entries()).map(
         ([productId, stat]) => ({
@@ -1047,7 +1050,7 @@ export const StorageService = {
             allotments.find((a) => a.productId === productId)?.productName ||
             "",
           totalAmount: stat.totalAmount,
-        })
+        }),
       ),
       topBuyer,
     };
