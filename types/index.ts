@@ -82,15 +82,16 @@ export interface BuyerPurchase {
 
 // Product within a patti with stock tracking
 export interface PattiProduct {
+  entryId?: string; // Unique per entry (allows same product added multiple times)
   productId: string;
   productName: string;
-  totalQuantity: number;       // Initial stock
-  remainingQuantity: number;   // Available stock
+  totalQuantity: number; // Initial stock
+  remainingQuantity: number; // Available stock
   weight: number;
   rate: number;
-  totalAmount: number;         // Calculated based on unit
+  totalAmount: number; // Calculated based on unit
   purchases: BuyerPurchase[];
-  unit?: number;               // From items.csv; >0 = weight-based calc
+  unit?: number; // From items.csv; >0 = weight-based calc
 }
 
 // Patti (Bill) - Main record structure
@@ -102,16 +103,16 @@ export interface PattiRecord {
   products: PattiProduct[];
   // Expenses and calculations
   commissionPercentage: number;
-  commissionAmount: number;    // (Total Patti Amount * Commission %) / 100
+  commissionAmount: number; // (Total Patti Amount * Commission %) / 100
   hamalliPerBag: number;
-  hamalliAmount: number;       // hamalliPerBag * total bags
+  hamalliAmount: number; // hamalliPerBag * total bags
   lorryAmount: number;
   cashAmount: number;
   otherExpenses: number;
-  totalPattiAmount: number;    // Sum of all product sales
-  totalDeductions: number;     // Sum of all expenses
-  finalPayableAmount: number;  // totalPattiAmount - totalDeductions
-  isClosed: boolean;           // Whether patti is finalized
+  totalPattiAmount: number; // Sum of all product sales
+  totalDeductions: number; // Sum of all expenses
+  finalPayableAmount: number; // totalPattiAmount - totalDeductions
+  isClosed: boolean; // Whether patti is finalized
   createdAt: number;
   updatedAt: number;
 }

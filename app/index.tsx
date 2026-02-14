@@ -349,7 +349,13 @@ export default function Dashboard() {
       {/* Actions Strip */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Quick Actions</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          persistentScrollbar={true}
+          contentContainerStyle={styles.actionScroll}
+          style={styles.actionScrollContainer}
+        >
           <Button
             title="Add Allotment"
             onPress={() => router.push("/allotments")}
@@ -583,6 +589,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+  },
+  actionScrollContainer: {
+    paddingBottom: 6,
   },
   actionScroll: {
     paddingRight: 20,
