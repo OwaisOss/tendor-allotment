@@ -97,6 +97,7 @@ export interface PattiProduct {
 // Patti (Bill) - Main record structure
 export interface PattiRecord {
   id: string;
+  billNumber: number; // Auto-incrementing display number (1, 2, 3...)
   date: string;
   farmerId: string;
   farmerName: string;
@@ -172,6 +173,8 @@ export interface BuyerReport {
     farmerName: string;
     productName: string;
     quantity: number;
+    weight: number;
+    unit: number;
     rate: number;
     amount: number;
   }[];
@@ -258,6 +261,10 @@ export interface NewDashboardStats {
 
 // Profile/Settings type for defaults
 export interface AppProfile {
+  name: string;
+  address1: string;
+  address2: string;
+  phoneNumber: string;
   defaultCommissionPercentage: number;
   defaultHamalliPerBag: number;
   defaultLorryAmount: number;

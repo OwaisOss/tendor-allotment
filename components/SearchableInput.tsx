@@ -19,6 +19,7 @@ interface SearchableInputProps {
   label?: string;
   allowNew?: boolean;
   containerStyle?: any;
+  autoFocus?: boolean;
 }
 
 export const SearchableInput: React.FC<SearchableInputProps> = ({
@@ -31,6 +32,7 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
   label,
   allowNew = true,
   containerStyle,
+  autoFocus = false,
 }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
@@ -142,6 +144,24 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
 
   const showList = isFocus && dropdownData.length > 0;
 
+  // Render label with the matched portion highlighted in yellow
+  const renderHighlighted = (text: string) => {
+    const query = searchQuery.trim();
+    if (!query) return <Text style={styles.itemText}>{text}</Text>;
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(query.toLowerCase());
+    if (idx === -1) return <Text style={styles.itemText}>{text}</Text>;
+    return (
+      <Text style={styles.itemText}>
+        {text.slice(0, idx)}
+        <Text style={styles.highlight}>
+          {text.slice(idx, idx + query.length)}
+        </Text>
+        {text.slice(idx + query.length)}
+      </Text>
+    );
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label && (
@@ -157,6 +177,9 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
         onBlur={handleBlur}
         placeholder={placeholder}
         placeholderTextColor="#94A3B8"
+        autoFocus={autoFocus}
+        selectionColor="#ffea49"
+        cursorColor="#ffea49"
       />
       {showList && (
         <ScrollView
@@ -173,11 +196,13 @@ export const SearchableInput: React.FC<SearchableInputProps> = ({
                 onPress={() => handleChange(item)}
               >
                 <View style={[styles.item, isAddNew && styles.addNewItem]}>
-                  <Text
-                    style={[styles.itemText, isAddNew && styles.addNewText]}
-                  >
-                    {item.label}
-                  </Text>
+                  {isAddNew ? (
+                    <Text style={[styles.itemText, styles.addNewText]}>
+                      {item.label}
+                    </Text>
+                  ) : (
+                    renderHighlighted(item.label)
+                  )}
                 </View>
               </TouchableOpacity>
             );
@@ -210,8 +235,8 @@ const styles = StyleSheet.create({
     color: "#0F172A", // Slate 900
   },
   textInputFocused: {
-    borderColor: "#2563EB",
-    borderWidth: 2,
+    borderColor: "#FEF08A",
+    borderWidth: 3,
   },
   listContainer: {
     backgroundColor: "#fff",
@@ -245,5 +270,9 @@ const styles = StyleSheet.create({
   addNewText: {
     color: "#0284C7", // Sky 600
     fontWeight: "600",
+  },
+  highlight: {
+    backgroundColor: "#FEF08A",
+    color: "#713F12",
   },
 });

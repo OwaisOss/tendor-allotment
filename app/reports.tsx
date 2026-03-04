@@ -18,7 +18,10 @@ import {
   FarmerService,
   PattiService,
 } from "../utils/storage";
-import { generateAndShareFarmerBill } from "../utils/pdfGenerator";
+import {
+  generateAndShareFarmerBill,
+  generateAndShareBuyerReport,
+} from "../utils/pdfGenerator";
 import {
   FarmerReport,
   BuyerReport,
@@ -82,9 +85,7 @@ export default function Reports() {
 
   const handlePrintFarmerBill = async (patti: PattiRecord) => {
     const success = await generateAndShareFarmerBill(patti.farmerName, patti);
-    if (success) {
-      Alert.alert("Success", "Bill shared successfully");
-    } else {
+    if (!success) {
       Alert.alert("Error", "Failed to generate PDF");
     }
   };
@@ -98,24 +99,38 @@ export default function Reports() {
       );
     }
 
+    const sortedFarmerReports = [...farmerReports].sort((a, b) => {
+      const aLatest =
+        a.pattis.length > 0
+          ? a.pattis.reduce((max, p) => (p.date > max ? p.date : max), "")
+          : "";
+      const bLatest =
+        b.pattis.length > 0
+          ? b.pattis.reduce((max, p) => (p.date > max ? p.date : max), "")
+          : "";
+      return bLatest.localeCompare(aLatest);
+    });
+
     return (
       <>
-        {farmerReports.map((report) => (
+        {sortedFarmerReports.map((report) => (
           <TouchableOpacity
             key={report.farmerId}
             onPress={() => handleFarmerClick(report)}
           >
             <Card style={styles.reportCard}>
               <View style={styles.reportHeader}>
-                <View>
+                <View style={styles.reportNameCol}>
                   <Text
                     style={[styles.reportName, { color: theme.colors.text }]}
+                    numberOfLines={1}
                   >
                     {report.farmerName}
                   </Text>
                   <Text style={styles.reportSubtitle}>
-                    {report.totalPattis} pattis • {report.totalProducts}{" "}
-                    products
+                    {report.totalPattis}{" "}
+                    {report.totalPattis === 1 ? "patti" : "pattis"} •{" "}
+                    {report.totalBags} bags
                   </Text>
                 </View>
                 <View style={styles.reportStats}>
@@ -125,9 +140,11 @@ export default function Reports() {
                       { color: theme.colors.success },
                     ]}
                   >
-                    ₹{report.totalSales.toFixed(2)}
+                    ₹{report.totalSales.toFixed(0)}
                   </Text>
-                  <Text style={styles.reportBags}>{report.totalBags} bags</Text>
+                  <Text style={styles.reportBags}>
+                    {report.totalProducts} products
+                  </Text>
                 </View>
               </View>
 
@@ -140,7 +157,7 @@ export default function Reports() {
                       { color: theme.colors.danger },
                     ]}
                   >
-                    ₹{report.totalCommission.toFixed(2)}
+                    ₹{report.totalCommission.toFixed(0)}
                   </Text>
                 </View>
                 <View style={styles.summaryItem}>
@@ -151,7 +168,7 @@ export default function Reports() {
                       { color: theme.colors.primary },
                     ]}
                   >
-                    ₹{report.totalPayable.toFixed(2)}
+                    ₹{report.totalPayable.toFixed(0)}
                   </Text>
                 </View>
               </View>
@@ -167,6 +184,13 @@ export default function Reports() {
   const handleBuyerClick = (report: BuyerReport) => {
     setSelectedBuyer(report);
     setShowBuyerModal(true);
+  };
+
+  const handlePrintBuyerReport = async (report: BuyerReport) => {
+    const success = await generateAndShareBuyerReport(report);
+    if (!success) {
+      Alert.alert("Error", "Failed to generate PDF");
+    }
   };
 
   const renderBuyerReports = () => {
@@ -187,14 +211,17 @@ export default function Reports() {
           >
             <Card style={styles.reportCard}>
               <View style={styles.reportHeader}>
-                <View>
+                <View style={styles.reportNameCol}>
                   <Text
                     style={[styles.reportName, { color: theme.colors.text }]}
+                    numberOfLines={1}
                   >
                     {report.buyerName}
                   </Text>
                   <Text style={styles.reportSubtitle}>
-                    {report.totalPurchases} purchases
+                    {report.totalPurchases}{" "}
+                    {report.totalPurchases === 1 ? "purchase" : "purchases"} •{" "}
+                    {report.totalBags} bags
                   </Text>
                 </View>
                 <View style={styles.reportStats}>
@@ -204,9 +231,8 @@ export default function Reports() {
                       { color: theme.colors.primary },
                     ]}
                   >
-                    ₹{report.totalAmount.toFixed(2)}
+                    ₹{report.totalAmount.toFixed(0)}
                   </Text>
-                  <Text style={styles.reportBags}>{report.totalBags} bags</Text>
                 </View>
               </View>
             </Card>
@@ -604,6 +630,11 @@ export default function Reports() {
             onPress: () => setShowBuyerModal(false),
             variant: "secondary",
           },
+          {
+            label: "Share PDF",
+            onPress: () => handlePrintBuyerReport(selectedBuyer),
+            variant: "success",
+          },
         ]}
       >
         <ScrollView style={styles.modalContent}>
@@ -816,18 +847,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
   },
   tabsContainer: {
-    maxHeight: 70,
+    maxHeight: 84,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
   tabs: {
     flexDirection: "row",
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 8,
   },
   tabButton: {
-    minWidth: 100,
+    minWidth: 90,
   },
   reportsContainer: {
     flex: 1,
@@ -839,29 +871,34 @@ const styles = StyleSheet.create({
   reportHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  reportNameCol: {
+    flex: 1,
+    marginRight: 12,
   },
   reportName: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
   },
   reportSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#666",
-    marginTop: 4,
+    marginTop: 3,
   },
   reportStats: {
     alignItems: "flex-end",
+    flexShrink: 0,
   },
   reportAmount: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   reportBags: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#666",
-    marginTop: 4,
+    marginTop: 2,
   },
   reportSummary: {
     borderTopWidth: 1,

@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-} from "react-native";
+import { View, Text, StyleSheet, ScrollView, TextInput } from "react-native";
 import { useTheme } from "../context/ThemeContext";
-import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { PattiRecord, PattiProduct } from "../types";
 
@@ -31,6 +24,9 @@ interface PattiSummaryModalProps {
   };
 }
 
+// Returns "" when value is 0 so placeholder "0" is shown instead
+const toInput = (val: number) => (val === 0 ? "" : val.toString());
+
 export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
   visible,
   onClose,
@@ -41,38 +37,40 @@ export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
   const theme = useTheme();
 
   const [commissionPercentage, setCommissionPercentage] = useState(
-    defaultExpenses.commissionPercentage.toString()
+    toInput(defaultExpenses.commissionPercentage),
   );
   const [hamalliPerBag, setHamalliPerBag] = useState(
-    defaultExpenses.hamalliPerBag.toString()
+    toInput(defaultExpenses.hamalliPerBag),
   );
   const [lorryAmount, setLorryAmount] = useState(
-    defaultExpenses.lorryAmount.toString()
+    toInput(defaultExpenses.lorryAmount),
   );
   const [cashAmount, setCashAmount] = useState(
-    defaultExpenses.cashAmount.toString()
+    toInput(defaultExpenses.cashAmount),
   );
   const [otherExpenses, setOtherExpenses] = useState(
-    defaultExpenses.otherExpenses.toString()
+    toInput(defaultExpenses.otherExpenses),
   );
 
-  // Reset values when modal opens with new patti
+  const [commSel, setCommSel] = useState<{ start: number; end: number } | undefined>();
+  const [hamSel, setHamSel] = useState<{ start: number; end: number } | undefined>();
+
+  // Reset values each time modal opens
   useEffect(() => {
     if (visible) {
-      setCommissionPercentage(defaultExpenses.commissionPercentage.toString());
-      setHamalliPerBag(defaultExpenses.hamalliPerBag.toString());
-      setLorryAmount(defaultExpenses.lorryAmount.toString());
-      setCashAmount(defaultExpenses.cashAmount.toString());
-      setOtherExpenses(defaultExpenses.otherExpenses.toString());
+      setCommissionPercentage(toInput(defaultExpenses.commissionPercentage));
+      setHamalliPerBag(toInput(defaultExpenses.hamalliPerBag));
+      setLorryAmount(toInput(defaultExpenses.lorryAmount));
+      setCashAmount(toInput(defaultExpenses.cashAmount));
+      setOtherExpenses(toInput(defaultExpenses.otherExpenses));
     }
   }, [visible, defaultExpenses]);
 
   if (!patti) return null;
 
-  // Calculate totals
+  // Live calculations
   let totalBags = 0;
   let totalSales = 0;
-
   patti.products.forEach((product) => {
     totalBags += product.totalQuantity;
     totalSales += product.totalAmount;
@@ -100,9 +98,13 @@ export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
     });
   };
 
+  // Clear "0" on focus so user can type without deleting first
+  const onFocusClear = (value: string, setter: (v: string) => void) => {
+    if (value === "0") setter("");
+  };
+
   const renderProductSummary = (product: PattiProduct, index: number) => {
     const soldQty = product.totalQuantity - product.remainingQuantity;
-
     return (
       <View key={product.productId} style={styles.productCard}>
         <Text style={[styles.productTitle, { color: theme.colors.text }]}>
@@ -134,7 +136,7 @@ export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Amount:</Text>
             <Text style={[styles.detailValue, { color: theme.colors.success }]}>
-              ₹{product.totalAmount.toFixed(2)}
+              ₹{Math.round(product.totalAmount)}
             </Text>
           </View>
           {product.purchases.length > 0 && (
@@ -159,41 +161,56 @@ export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
     <Modal
       visible={visible}
       onClose={onClose}
-      title={`Patti Summary - ${patti.farmerName}`}
+      title={`Patti — ${patti.farmerName}`}
       actions={[
-        {
-          label: "Cancel",
-          onPress: onClose,
-          variant: "secondary",
-        },
-        {
-          label: "Save Patti",
-          onPress: handleSave,
-          variant: "success",
-        },
+        { label: "Cancel", onPress: onClose, variant: "secondary" },
+        { label: "Save Patti", onPress: handleSave, variant: "success" },
       ]}
     >
-      <ScrollView style={styles.container}>
-        {/* Products Summary */}
+      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+        {/* Products */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
             Products ({patti.products.length})
           </Text>
           {patti.products.map((product, index) =>
-            renderProductSummary(product, index)
+            renderProductSummary(product, index),
           )}
         </View>
 
-        {/* Total Sales */}
-        <View style={[styles.totalCard, { backgroundColor: theme.colors.light }]}>
-          <View style={styles.detailRow}>
-            <Text style={styles.totalLabel}>Total Bags:</Text>
-            <Text style={styles.totalValue}>{totalBags}</Text>
+        {/* Total Sales card */}
+        <View
+          style={[
+            styles.totalCard,
+            {
+              backgroundColor: theme.colors.primary + "10",
+              borderColor: theme.colors.primary + "25",
+            },
+          ]}
+        >
+          <View style={styles.totalRow}>
+            <Text
+              style={[styles.totalLabel, { color: theme.colors.secondary }]}
+            >
+              Total Bags
+            </Text>
+            <Text style={[styles.totalValue, { color: theme.colors.text }]}>
+              {totalBags}
+            </Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.totalLabel}>Total Sales:</Text>
-            <Text style={[styles.totalValue, { color: theme.colors.success }]}>
-              ₹{totalSales.toFixed(2)}
+          <View style={styles.totalRow}>
+            <Text
+              style={[styles.totalLabel, { color: theme.colors.secondary }]}
+            >
+              Total Sales
+            </Text>
+            <Text
+              style={[
+                styles.totalValue,
+                { color: theme.colors.success, fontSize: 18 },
+              ]}
+            >
+              ₹{Math.round(totalSales)}
             </Text>
           </View>
         </View>
@@ -205,70 +222,193 @@ export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
           </Text>
 
           {/* Commission */}
-          <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Commission (%):</Text>
-            <TextInput
-              style={[styles.input, { borderColor: theme.colors.border }]}
-              value={commissionPercentage}
-              onChangeText={setCommissionPercentage}
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={styles.calculatedRow}>
-            <Text style={styles.calculatedLabel}>Commission Amount:</Text>
-            <Text style={[styles.calculatedValue, { color: theme.colors.danger }]}>
-              ₹{commissionAmount.toFixed(2)}
-            </Text>
+          <View
+            style={[styles.deductionCard, { borderColor: theme.colors.border }]}
+          >
+            <View style={styles.inputRow}>
+              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+                Commission
+              </Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.light,
+                      color: theme.colors.text,
+                    },
+                  ]}
+                  value={commissionPercentage}
+                  onChangeText={setCommissionPercentage}
+                  onFocus={() => {
+                    onFocusClear(commissionPercentage, setCommissionPercentage);
+                    const len = commissionPercentage === "0" ? 0 : commissionPercentage.length;
+                    setCommSel({ start: len, end: len });
+                    setTimeout(() => setCommSel(undefined), 0);
+                  }}
+                  selection={commSel}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={theme.colors.secondary}
+                />
+                <Text
+                  style={[styles.inputUnit, { color: theme.colors.secondary }]}
+                >
+                  %
+                </Text>
+              </View>
+            </View>
+            <View style={styles.calcRow}>
+              <Text
+                style={[styles.calcLabel, { color: theme.colors.secondary }]}
+              >
+                Commission amount
+              </Text>
+              <Text style={[styles.calcValue, { color: theme.colors.danger }]}>
+                ₹{Math.round(commissionAmount)}
+              </Text>
+            </View>
           </View>
 
           {/* Hamalli */}
-          <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Hamalli per bag (₹):</Text>
-            <TextInput
-              style={[styles.input, { borderColor: theme.colors.border }]}
-              value={hamalliPerBag}
-              onChangeText={setHamalliPerBag}
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={styles.calculatedRow}>
-            <Text style={styles.calculatedLabel}>Hamalli Amount:</Text>
-            <Text style={[styles.calculatedValue, { color: theme.colors.danger }]}>
-              ₹{hamalliAmount.toFixed(2)}
-            </Text>
+          <View
+            style={[styles.deductionCard, { borderColor: theme.colors.border }]}
+          >
+            <View style={styles.inputRow}>
+              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+                Hamalli / bag
+              </Text>
+              <View style={styles.inputWrapper}>
+                <Text
+                  style={[styles.inputUnit, { color: theme.colors.secondary }]}
+                >
+                  ₹
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.light,
+                      color: theme.colors.text,
+                    },
+                  ]}
+                  value={hamalliPerBag}
+                  onChangeText={setHamalliPerBag}
+                  onFocus={() => {
+                    onFocusClear(hamalliPerBag, setHamalliPerBag);
+                    const len = hamalliPerBag === "0" ? 0 : hamalliPerBag.length;
+                    setHamSel({ start: len, end: len });
+                    setTimeout(() => setHamSel(undefined), 0);
+                  }}
+                  selection={hamSel}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={theme.colors.secondary}
+                />
+              </View>
+            </View>
+            <View style={styles.calcRow}>
+              <Text
+                style={[styles.calcLabel, { color: theme.colors.secondary }]}
+              >
+                Hamalli amount ({totalBags} bags)
+              </Text>
+              <Text style={[styles.calcValue, { color: theme.colors.danger }]}>
+                ₹{Math.round(hamalliAmount)}
+              </Text>
+            </View>
           </View>
 
           {/* Lorry */}
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Lorry Amount (₹):</Text>
-            <TextInput
-              style={[styles.input, { borderColor: theme.colors.border }]}
-              value={lorryAmount}
-              onChangeText={setLorryAmount}
-              keyboardType="numeric"
-            />
+            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+              Lorry amount
+            </Text>
+            <View style={styles.inputWrapper}>
+              <Text
+                style={[styles.inputUnit, { color: theme.colors.secondary }]}
+              >
+                ₹
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.light,
+                    color: theme.colors.text,
+                  },
+                ]}
+                value={lorryAmount}
+                onChangeText={setLorryAmount}
+                onFocus={() => onFocusClear(lorryAmount, setLorryAmount)}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={theme.colors.secondary}
+              />
+            </View>
           </View>
 
           {/* Cash */}
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Cash Amount (₹):</Text>
-            <TextInput
-              style={[styles.input, { borderColor: theme.colors.border }]}
-              value={cashAmount}
-              onChangeText={setCashAmount}
-              keyboardType="numeric"
-            />
+            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+              Cash amount
+            </Text>
+            <View style={styles.inputWrapper}>
+              <Text
+                style={[styles.inputUnit, { color: theme.colors.secondary }]}
+              >
+                ₹
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.light,
+                    color: theme.colors.text,
+                  },
+                ]}
+                value={cashAmount}
+                onChangeText={setCashAmount}
+                onFocus={() => onFocusClear(cashAmount, setCashAmount)}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={theme.colors.secondary}
+              />
+            </View>
           </View>
 
-          {/* Other Expenses */}
+          {/* Other */}
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Other Expenses (₹):</Text>
-            <TextInput
-              style={[styles.input, { borderColor: theme.colors.border }]}
-              value={otherExpenses}
-              onChangeText={setOtherExpenses}
-              keyboardType="numeric"
-            />
+            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+              Other expenses
+            </Text>
+            <View style={styles.inputWrapper}>
+              <Text
+                style={[styles.inputUnit, { color: theme.colors.secondary }]}
+              >
+                ₹
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.light,
+                    color: theme.colors.text,
+                  },
+                ]}
+                value={otherExpenses}
+                onChangeText={setOtherExpenses}
+                onFocus={() => onFocusClear(otherExpenses, setOtherExpenses)}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={theme.colors.secondary}
+              />
+            </View>
           </View>
         </View>
 
@@ -276,20 +416,38 @@ export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
         <View
           style={[
             styles.finalCard,
-            { backgroundColor: theme.colors.primary + "20" },
+            {
+              backgroundColor: theme.colors.primary + "10",
+              borderColor: theme.colors.primary + "25",
+            },
           ]}
         >
-          <View style={styles.detailRow}>
-            <Text style={styles.finalLabel}>Total Deductions:</Text>
-            <Text style={[styles.finalValue, { color: theme.colors.danger }]}>
-              ₹{totalDeductions.toFixed(2)}
+          <View style={styles.totalRow}>
+            <Text
+              style={[styles.totalLabel, { color: theme.colors.secondary }]}
+            >
+              Total Deductions
+            </Text>
+            <Text style={[styles.totalValue, { color: theme.colors.danger }]}>
+              ₹{Math.round(totalDeductions)}
             </Text>
           </View>
-          <View style={styles.divider} />
-          <View style={styles.detailRow}>
-            <Text style={styles.finalPayableLabel}>Final Payable:</Text>
-            <Text style={[styles.finalPayableValue, { color: theme.colors.success }]}>
-              ₹{finalPayable.toFixed(2)}
+          <View
+            style={[styles.divider, { backgroundColor: theme.colors.border }]}
+          />
+          <View style={styles.totalRow}>
+            <Text
+              style={[styles.finalPayableLabel, { color: theme.colors.text }]}
+            >
+              Final Payable
+            </Text>
+            <Text
+              style={[
+                styles.finalPayableValue,
+                { color: theme.colors.success },
+              ]}
+            >
+              ₹{Math.round(finalPayable)}
             </Text>
           </View>
         </View>
@@ -300,15 +458,16 @@ export const PattiSummaryModal: React.FC<PattiSummaryModalProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    maxHeight: 500,
+    maxHeight: 520,
   },
   section: {
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 10,
+    letterSpacing: -0.2,
   },
   productCard: {
     backgroundColor: "#f8f9fa",
@@ -339,6 +498,37 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#333",
   },
+  buyerText: {
+    fontSize: 12,
+    color: "#555",
+  },
+  productStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  statBlock: {
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    minWidth: 54,
+  },
+  amountBlock: {
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
   buyersSection: {
     marginTop: 8,
     paddingTop: 8,
@@ -354,85 +544,93 @@ const styles = StyleSheet.create({
   buyerRow: {
     paddingVertical: 2,
   },
-  buyerText: {
-    fontSize: 12,
-    color: "#555",
-  },
   totalCard: {
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
     marginBottom: 16,
+    gap: 8,
+  },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   totalLabel: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
+    fontWeight: "500",
   },
   totalValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  deductionCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+    marginBottom: 8,
   },
   inputRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 4,
+    paddingVertical: 4,
   },
   inputLabel: {
     fontSize: 14,
-    color: "#333",
+    fontWeight: "500",
     flex: 1,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  inputUnit: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   input: {
     borderWidth: 1,
-    borderRadius: 6,
-    padding: 8,
-    width: 100,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    width: 90,
     textAlign: "right",
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: "600",
   },
-  calculatedRow: {
+  calcRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
-    paddingLeft: 8,
+    paddingTop: 4,
+    paddingHorizontal: 2,
   },
-  calculatedLabel: {
-    fontSize: 13,
-    color: "#666",
+  calcLabel: {
+    fontSize: 12,
   },
-  calculatedValue: {
+  calcValue: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   finalCard: {
-    borderRadius: 8,
-    padding: 16,
-    marginTop: 8,
-  },
-  finalLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#333",
-  },
-  finalValue: {
-    fontSize: 14,
-    fontWeight: "600",
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 8,
+    gap: 8,
   },
   divider: {
     height: 1,
-    backgroundColor: "#ddd",
-    marginVertical: 8,
   },
   finalPayableLabel: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#333",
   },
   finalPayableValue: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "800",
   },
 });

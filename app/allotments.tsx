@@ -154,7 +154,6 @@ export default function Allotments() {
     setSelectedFarmer({ id: farmer.id, name: farmer.name });
     setFarmerSearch(farmer.name);
     setFarmerListKey((prev) => prev + 1); // Force refresh of farmer list
-    Alert.alert("Success", `Farmer "${name}" added successfully`);
     setFlowState(FlowState.PRODUCT_SELECTION);
   };
 
@@ -173,7 +172,6 @@ export default function Allotments() {
     setProductSearch(product.label);
     setProductListKey((prev) => prev + 1);
     setSelectedProductUnit(0); // Dynamic products default to 0 unit
-    Alert.alert("Success", `Product "${name}" added successfully`);
     setTimeout(() => qtyRef.current?.focus(), 100);
   };
 
@@ -374,17 +372,24 @@ export default function Allotments() {
 
   // ============== OUT OF STOCK HANDLING ==============
 
-  const handleAnotherProductYes = () => {
+  const handleKeepSameFarmer = () => {
     setShowAnotherProductDialog(false);
 
-    // Clear product fields for new product
-    setProductSearch("");
+    // Pre-fill with the same product so user only needs to enter qty/rate
+    if (currentProduct) {
+      setProductSearch(currentProduct.productName);
+      setSelectedProductUnit(currentProduct.unit || 0);
+    }
+
+    // Clear quantities/rate for fresh stock entry
     setProductQty("");
     setProductWeight("");
     setProductRate("");
-    setSelectedProductUnit(0);
     setCurrentProduct(null);
     setFlowState(FlowState.PRODUCT_SELECTION);
+
+    // Focus Bag input after screen renders
+    setTimeout(() => qtyRef.current?.focus(), 300);
   };
 
   const handleAnotherProductNo = () => {
@@ -561,19 +566,7 @@ export default function Allotments() {
           onAddNew={handleFarmerAdd}
           options={allFarmerOptions}
           placeholder="Type to search or add new farmer"
-        />
-        <Button
-          title="Continue"
-          onPress={() => {
-            if (selectedFarmer) {
-              setFlowState(FlowState.PRODUCT_SELECTION);
-            } else if (farmerSearch.trim()) {
-              handleFarmerAdd(farmerSearch.trim());
-            } else {
-              Alert.alert("Error", "Please enter or select a farmer");
-            }
-          }}
-          style={styles.continueButton}
+          autoFocus
         />
       </Card>
     );
@@ -661,6 +654,7 @@ export default function Allotments() {
           onAddNew={handleProductAdd}
           options={productLabels}
           placeholder="Type to search or add new product"
+          autoFocus
         />
 
         {/* Compact input row: Qty, Weight (if unit>0), Rate */}
@@ -720,7 +714,7 @@ export default function Allotments() {
                 { borderColor: theme.colors.border },
               ]}
               value={productRate}
-              onChangeText={setProductRate}
+              onChangeText={(t) => setProductRate(t.replace(/[^0-9.]/g, ""))}
               keyboardType="numeric"
               placeholder="₹"
               returnKeyType="done"
@@ -1010,13 +1004,16 @@ export default function Allotments() {
           flowState === FlowState.PATTI_SUMMARY) &&
           renderActivePattiSummary()}
 
-        {/* Cancel Button */}
-        {activePatti && (
+        {/* Cancel Button — shown in product selection AND while selling */}
+        {(flowState === FlowState.PRODUCT_SELECTION || activePatti) && (
           <Button
             title="Cancel Patti"
             onPress={handleCancel}
             variant="danger"
-            style={styles.cancelButton}
+            style={{
+              ...styles.cancelButton,
+              marginBottom: flowState === FlowState.BUYER_PURCHASE ? 160 : 160,
+            }}
             icon={<AntDesign name="closecircle" size={20} color="white" />}
           />
         )}
@@ -1026,23 +1023,23 @@ export default function Allotments() {
       <Modal
         visible={showAnotherProductDialog}
         onClose={() => setShowAnotherProductDialog(false)}
-        title="Out of Stock"
+        title="Stock Sold Out"
         actions={[
           {
-            label: "No, Save Patti",
+            label: "No, Save Bill",
             onPress: handleAnotherProductNo,
             variant: "success",
           },
           {
-            label: "Yes, Add Product",
-            onPress: handleAnotherProductYes,
+            label: "Keep Same Farmer",
+            onPress: handleKeepSameFarmer,
             variant: "primary",
           },
         ]}
       >
-        <Text>The current product is now out of stock.</Text>
+        <Text>All stock for this product has been sold.</Text>
         <Text style={styles.dialogText}>
-          Does the same farmer have another product to sell?
+          Do you want to keep the same farmer and add more stock?
         </Text>
       </Modal>
 
@@ -1186,8 +1183,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   cancelButton: {
-    marginTop: 16,
-    marginBottom: 32,
+    marginTop: 8,
+    marginBottom: 24,
   },
   selectedFarmerBanner: {
     flexDirection: "row",
