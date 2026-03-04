@@ -37,6 +37,16 @@ const STORAGE_KEYS = {
   PATTIS: "pattis",
   ACTIVE_PATTI: "active_patti", // Currently active patti being built
   PROFILE: "profile",
+  BILL_COUNTER: "bill_counter", // Auto-incrementing bill number
+};
+
+// ============== BILL NUMBER COUNTER ==============
+
+const getNextBillNumber = (): number => {
+  const current = storage.getNumber(STORAGE_KEYS.BILL_COUNTER) ?? 0;
+  const next = current + 1;
+  storage.set(STORAGE_KEYS.BILL_COUNTER, next);
+  return next;
 };
 
 // ============== PROFILE/SETTINGS ==============
@@ -51,12 +61,21 @@ export const ProfileService = {
     return data
       ? JSON.parse(data)
       : {
+          name: "",
+          address1: "",
+          address2: "",
+          phoneNumber: "",
           defaultCommissionPercentage: 2,
           defaultHamalliPerBag: 2,
           defaultLorryAmount: 0,
           defaultCashAmount: 0,
           defaultOtherExpenses: 0,
         };
+  },
+
+  isProfileComplete: (): boolean => {
+    const profile = ProfileService.getProfile();
+    return !!(profile.name?.trim() && profile.phoneNumber?.trim());
   },
 
   getDefaultExpenses: () => {
@@ -317,6 +336,7 @@ export const PattiService = {
 
     const patti: PattiRecord = {
       id: `patti_${now}`,
+      billNumber: getNextBillNumber(),
       date: new Date().toISOString().split("T")[0],
       farmerId,
       farmerName,
@@ -555,6 +575,8 @@ export const ReportService = {
                 farmerName: patti.farmerName,
                 productName: product.productName,
                 quantity: purchase.quantity,
+                weight: product.weight,
+                unit: product.unit ?? 0,
                 rate: purchase.rate,
                 amount: purchase.totalAmount,
               });
@@ -1056,9 +1078,15 @@ export const StorageService = {
     };
   },
 
-  // Clear all data
+  // Clear all data except imported CSV files (customers + products)
   clearAllData: () => {
-    storage.clearAll();
+    storage.delete(STORAGE_KEYS.ALLOTMENTS);
+    storage.delete(STORAGE_KEYS.FARMERS);
+    storage.delete(STORAGE_KEYS.BUYERS);
+    storage.delete(STORAGE_KEYS.DYNAMIC_PRODUCTS);
+    storage.delete(STORAGE_KEYS.PATTIS);
+    storage.delete(STORAGE_KEYS.ACTIVE_PATTI);
+    storage.delete(STORAGE_KEYS.BILL_COUNTER);
   },
 };
 

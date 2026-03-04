@@ -81,10 +81,10 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    gap: 10,
     marginTop: 8,
   },
   actionButton: {
-    marginLeft: 8,
+    width: "50%",
   },
 });

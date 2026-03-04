@@ -10,8 +10,9 @@ import {
 } from "react-native";
 import { AntDesign } from "@expo/vector-icons";
 import { Modal } from "../components/Modal";
+import { SearchableInput } from "../components/SearchableInput";
 import { useTheme } from "../context/ThemeContext";
-import { PattiService, StorageService } from "../utils/storage";
+import { PattiService, StorageService, DynamicProductService, FarmerService, BuyerService } from "../utils/storage";
 import {
   PattiRecord,
   AllotmentRecord,
@@ -67,6 +68,9 @@ export default function ModifyRecords() {
 
   const [pattis, setPattis] = useState<PattiRecord[]>([]);
   const [allotments, setAllotments] = useState<AllotmentRecord[]>([]);
+  const [farmerSearch, setFarmerSearch] = useState("");
+  const [expandedPattiId, setExpandedPattiId] = useState<string | null>(null);
+  const [selectedItemUnit, setSelectedItemUnit] = useState<number>(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -124,6 +128,7 @@ export default function ModifyRecords() {
       rate: product.rate.toString(),
       weight: product.weight.toString(),
     });
+    setSelectedItemUnit(product.unit || 0);
     setEditMode("item");
     setShowItemModal(true);
   };
@@ -137,13 +142,16 @@ export default function ModifyRecords() {
       rate: "",
       weight: "",
     });
+    setSelectedItemUnit(0);
     setEditMode("item");
     setShowItemModal(true);
   };
 
   const handleDeleteItem = (index: number) => {
     if (!selectedPatti) return;
-    const updatedPatti = JSON.parse(JSON.stringify(selectedPatti)) as PattiRecord;
+    const updatedPatti = JSON.parse(
+      JSON.stringify(selectedPatti),
+    ) as PattiRecord;
     updatedPatti.products.splice(index, 1);
     recalculateAndSave(updatedPatti);
   };
@@ -178,7 +186,9 @@ export default function ModifyRecords() {
 
   const handleDeleteBuyer = (productIndex: number, buyerIndex: number) => {
     if (!selectedPatti) return;
-    const updatedPatti = JSON.parse(JSON.stringify(selectedPatti)) as PattiRecord;
+    const updatedPatti = JSON.parse(
+      JSON.stringify(selectedPatti),
+    ) as PattiRecord;
     updatedPatti.products[productIndex].purchases.splice(buyerIndex, 1);
     recalculateAndSave(updatedPatti);
   };
@@ -201,7 +211,11 @@ export default function ModifyRecords() {
   };
 
   // Helper: calculate purchase amount based on product unit
-  const calcPurchaseAmount = (product: PattiProduct, qty: number, rate: number): number => {
+  const calcPurchaseAmount = (
+    product: PattiProduct,
+    qty: number,
+    rate: number,
+  ): number => {
     const productUnit = product.unit || 0;
     if (productUnit > 0) {
       return (product.weight * qty * rate) / 100;
@@ -218,7 +232,11 @@ export default function ModifyRecords() {
       product.purchases.forEach((purchase) => {
         // Use the product's current rate for recalculation
         purchase.rate = product.rate;
-        purchase.totalAmount = calcPurchaseAmount(product, purchase.quantity, product.rate);
+        purchase.totalAmount = calcPurchaseAmount(
+          product,
+          purchase.quantity,
+          product.rate,
+        );
         totalAmount += purchase.totalAmount;
         totalSoldQty += purchase.quantity;
       });
@@ -226,7 +244,10 @@ export default function ModifyRecords() {
       product.totalAmount = totalAmount;
       // Keep totalQuantity as-is (it's the original stock, not derived from purchases)
       // Only set remainingQuantity based on sold
-      product.remainingQuantity = Math.max(0, product.totalQuantity - totalSoldQty);
+      product.remainingQuantity = Math.max(
+        0,
+        product.totalQuantity - totalSoldQty,
+      );
     });
 
     // Recalculate patti totals
@@ -265,7 +286,9 @@ export default function ModifyRecords() {
   const savePattiChanges = () => {
     if (!selectedPatti) return;
 
-    const updatedPatti = JSON.parse(JSON.stringify(selectedPatti)) as PattiRecord;
+    const updatedPatti = JSON.parse(
+      JSON.stringify(selectedPatti),
+    ) as PattiRecord;
 
     const trimmedFarmerName = editForm.farmerName.trim();
     if (!trimmedFarmerName) {
@@ -290,7 +313,9 @@ export default function ModifyRecords() {
   const saveItemChanges = () => {
     if (!selectedPatti) return;
 
-    const updatedPatti = JSON.parse(JSON.stringify(selectedPatti)) as PattiRecord;
+    const updatedPatti = JSON.parse(
+      JSON.stringify(selectedPatti),
+    ) as PattiRecord;
     const productName = itemForm.productName.trim();
     const totalQuantity = parseFloat(itemForm.totalQuantity) || 0;
     const rate = parseFloat(itemForm.rate) || 0;
@@ -309,9 +334,10 @@ export default function ModifyRecords() {
         productName,
         totalQuantity,
         remainingQuantity: totalQuantity,
-        weight,
+        weight: selectedItemUnit > 0 ? weight : 0,
         rate,
         totalAmount: 0,
+        unit: selectedItemUnit,
         purchases: [],
       };
       updatedPatti.products.push(newProduct);
@@ -330,9 +356,10 @@ export default function ModifyRecords() {
       }
 
       product.productName = productName;
-      product.weight = weight;
+      product.weight = selectedItemUnit > 0 ? weight : 0;
       product.rate = rate;
       product.totalQuantity = totalQuantity;
+      product.unit = selectedItemUnit;
       // recalculateAndSave will propagate the new rate to all purchases
     }
 
@@ -350,7 +377,9 @@ export default function ModifyRecords() {
   const saveBuyerChanges = () => {
     if (!selectedPatti || selectedProductIndex === -1) return;
 
-    const updatedPatti = JSON.parse(JSON.stringify(selectedPatti)) as PattiRecord;
+    const updatedPatti = JSON.parse(
+      JSON.stringify(selectedPatti),
+    ) as PattiRecord;
     const product = updatedPatti.products[selectedProductIndex];
 
     const buyerName = buyerForm.buyerName.trim();
@@ -419,12 +448,27 @@ export default function ModifyRecords() {
         Select Date
       </Text>
       {uniqueDates.length === 0 ? (
-        <View style={[styles.emptyCard, { backgroundColor: theme.colors.white, borderColor: theme.colors.border }]}>
+        <View
+          style={[
+            styles.emptyCard,
+            {
+              backgroundColor: theme.colors.white,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
           <AntDesign name="calendar" size={32} color={theme.colors.border} />
-          <Text style={[styles.emptyText, { color: theme.colors.secondary }]}>No records found</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.secondary }]}>
+            No records found
+          </Text>
         </View>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={true} persistentScrollbar={true} contentContainerStyle={styles.dateScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          persistentScrollbar={true}
+          contentContainerStyle={styles.dateScroll}
+        >
           {uniqueDates.map((date) => {
             const isSelected = selectedDate === date;
             return (
@@ -434,15 +478,31 @@ export default function ModifyRecords() {
                 style={[
                   styles.dateChip,
                   {
-                    backgroundColor: isSelected ? theme.colors.primary : theme.colors.white,
-                    borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: isSelected
+                      ? theme.colors.primary
+                      : theme.colors.white,
+                    borderColor: isSelected
+                      ? theme.colors.primary
+                      : theme.colors.border,
                   },
                 ]}
                 activeOpacity={0.7}
               >
-                <AntDesign name="calendar" size={14} color={isSelected ? "#fff" : theme.colors.secondary} />
-                <Text style={[styles.dateChipText, { color: isSelected ? "#fff" : theme.colors.text }]}>
-                  {new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                <AntDesign
+                  name="calendar"
+                  size={14}
+                  color={isSelected ? "#fff" : theme.colors.secondary}
+                />
+                <Text
+                  style={[
+                    styles.dateChipText,
+                    { color: isSelected ? "#fff" : theme.colors.text },
+                  ]}
+                >
+                  {new Date(date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
                 </Text>
               </TouchableOpacity>
             );
@@ -455,194 +515,612 @@ export default function ModifyRecords() {
   const renderPattisList = () => {
     if (datePattis.length === 0) return null;
 
+    const filteredPattis = farmerSearch.trim()
+      ? datePattis.filter((p) =>
+          p.farmerName.toLowerCase().includes(farmerSearch.toLowerCase()),
+        )
+      : datePattis;
+
     return (
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
           Patti Records
         </Text>
-        {datePattis.map((patti) => (
-          <View key={patti.id} style={[styles.recordCard, { backgroundColor: theme.colors.white, borderColor: theme.colors.border }]}>
-            {/* Header */}
-            <View style={styles.recordHeader}>
-              <View style={styles.farmerInfo}>
-                <View style={[styles.farmerAvatar, { backgroundColor: theme.colors.primary + "15" }]}>
-                  <AntDesign name="user" size={16} color={theme.colors.primary} />
+
+        {/* Farmer Search Bar */}
+        <View
+          style={[
+            styles.searchBar,
+            {
+              backgroundColor: theme.colors.white,
+              borderColor: theme.colors.border,
+            },
+          ]}
+        >
+          <AntDesign name="search1" size={18} color={theme.colors.secondary} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.colors.text }]}
+            value={farmerSearch}
+            onChangeText={setFarmerSearch}
+            placeholder="Search farmer..."
+            placeholderTextColor={theme.colors.secondary}
+          />
+          {farmerSearch.length > 0 && (
+            <TouchableOpacity onPress={() => setFarmerSearch("")}>
+              <AntDesign
+                name="closecircle"
+                size={16}
+                color={theme.colors.secondary}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {filteredPattis.length === 0 && (
+          <View
+            style={[
+              styles.emptyCard,
+              {
+                backgroundColor: theme.colors.white,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
+            <AntDesign name="user" size={32} color={theme.colors.border} />
+            <Text style={[styles.emptyText, { color: theme.colors.secondary }]}>
+              No farmers found
+            </Text>
+          </View>
+        )}
+
+        {filteredPattis.map((patti) => {
+          const isExpanded = expandedPattiId === patti.id;
+          return (
+            <View
+              key={patti.id}
+              style={[
+                styles.recordCard,
+                {
+                  backgroundColor: theme.colors.white,
+                  borderColor: isExpanded
+                    ? theme.colors.primary
+                    : theme.colors.border,
+                  borderWidth: isExpanded ? 2 : 1,
+                },
+              ]}
+            >
+              {/* Farmer Header Row — tap to expand/collapse */}
+              <TouchableOpacity
+                onPress={() => setExpandedPattiId(isExpanded ? null : patti.id)}
+                activeOpacity={0.75}
+                style={styles.recordHeader}
+              >
+                <View style={styles.farmerInfo}>
+                  <View
+                    style={[
+                      styles.farmerAvatar,
+                      { backgroundColor: theme.colors.primary + "20" },
+                    ]}
+                  >
+                    <AntDesign
+                      name="user"
+                      size={18}
+                      color={theme.colors.primary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[styles.farmerName, { color: theme.colors.text }]}
+                    >
+                      {patti.farmerName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.farmerSubtitle,
+                        { color: theme.colors.secondary },
+                      ]}
+                    >
+                      {patti.products.length} product
+                      {patti.products.length !== 1 ? "s" : ""} · ₹
+                      {patti.finalPayableAmount.toFixed(0)} payable
+                    </Text>
+                  </View>
                 </View>
-                <Text style={[styles.farmerName, { color: theme.colors.text }]}>{patti.farmerName}</Text>
-              </View>
-              <View style={styles.headerActions}>
-                <TouchableOpacity onPress={() => handleEditPatti(patti)} style={[styles.iconBtn, { backgroundColor: theme.colors.warning + "15" }]}>
-                  <AntDesign name="edit" size={16} color={theme.colors.warning} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeletePatti(patti)} style={[styles.iconBtn, { backgroundColor: theme.colors.danger + "15" }]}>
-                  <AntDesign name="delete" size={16} color={theme.colors.danger} />
-                </TouchableOpacity>
-              </View>
-            </View>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    onPress={() => handleEditPatti(patti)}
+                    style={[
+                      styles.iconBtn,
+                      { backgroundColor: theme.colors.warning },
+                    ]}
+                  >
+                    <AntDesign name="edit" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeletePatti(patti)}
+                    style={[
+                      styles.iconBtn,
+                      { backgroundColor: theme.colors.danger },
+                    ]}
+                  >
+                    <AntDesign name="delete" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <AntDesign
+                    name={isExpanded ? "up" : "down"}
+                    size={16}
+                    color={theme.colors.secondary}
+                    style={{ marginLeft: 4 }}
+                  />
+                </View>
+              </TouchableOpacity>
 
-            {/* Products */}
-            <View style={styles.productsContainer}>
-              <View style={styles.productsHeader}>
-                <Text style={[styles.subHeader, { color: theme.colors.secondary }]}>Products</Text>
-                <TouchableOpacity
-                  onPress={() => { setSelectedPatti(patti); handleAddItem(); }}
-                  style={[styles.addChip, { backgroundColor: theme.colors.primary + "12" }]}
-                >
-                  <AntDesign name="plus" size={12} color={theme.colors.primary} />
-                  <Text style={[styles.addChipText, { color: theme.colors.primary }]}>Add</Text>
-                </TouchableOpacity>
-              </View>
-
-              {patti.products.map((product, idx) => (
-                <View key={idx} style={[styles.productCard, { borderLeftColor: theme.colors.primary }]}>
-                  <View style={styles.productHeader}>
-                    <Text style={[styles.productName, { color: theme.colors.primary }]}>{product.productName}</Text>
-                    <View style={styles.productActions}>
-                      <TouchableOpacity
-                        onPress={() => { setSelectedPatti(patti); handleEditItem(product, idx); }}
-                        style={[styles.tinyIconBtn, { backgroundColor: theme.colors.warning + "15" }]}
-                      >
-                        <AntDesign name="edit" size={12} color={theme.colors.warning} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => { setSelectedPatti(patti); handleDeleteItem(idx); }}
-                        style={[styles.tinyIconBtn, { backgroundColor: theme.colors.danger + "15" }]}
-                      >
-                        <AntDesign name="delete" size={12} color={theme.colors.danger} />
-                      </TouchableOpacity>
-                    </View>
+              {/* Expanded: Products + Buyers */}
+              {isExpanded && (
+                <View style={styles.productsContainer}>
+                  {/* Products header with Add Product button */}
+                  <View style={styles.productsHeader}>
+                    <Text
+                      style={[
+                        styles.subHeader,
+                        { color: theme.colors.secondary },
+                      ]}
+                    >
+                      Products
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedPatti(patti);
+                        handleAddItem();
+                      }}
+                      style={[
+                        styles.addProductBtn,
+                        { backgroundColor: theme.colors.primary },
+                      ]}
+                    >
+                      <AntDesign name="plus" size={14} color="#fff" />
+                      <Text style={styles.addProductBtnText}>Add Product</Text>
+                    </TouchableOpacity>
                   </View>
 
-                  <View style={styles.productStats}>
-                    <View style={styles.statPill}>
-                      <Text style={[styles.statPillLabel, { color: theme.colors.secondary }]}>Total</Text>
-                      <Text style={[styles.statPillValue, { color: theme.colors.text }]}>{product.totalQuantity}</Text>
-                    </View>
-                    <View style={styles.statPill}>
-                      <Text style={[styles.statPillLabel, { color: theme.colors.secondary }]}>Sold</Text>
-                      <Text style={[styles.statPillValue, { color: theme.colors.warning }]}>
-                        {product.totalQuantity - product.remainingQuantity}
-                      </Text>
-                    </View>
-                    <View style={styles.statPill}>
-                      <Text style={[styles.statPillLabel, { color: theme.colors.secondary }]}>Left</Text>
-                      <Text style={[styles.statPillValue, { color: product.remainingQuantity > 0 ? theme.colors.success : theme.colors.danger }]}>
-                        {product.remainingQuantity}
-                      </Text>
-                    </View>
-                    <View style={styles.statPill}>
-                      <Text style={[styles.statPillLabel, { color: theme.colors.secondary }]}>Rate</Text>
-                      <Text style={[styles.statPillValue, { color: theme.colors.text }]}>₹{product.rate}</Text>
-                    </View>
-                  </View>
-
-                  {/* Amount row */}
-                  <View style={[styles.amountRow, { backgroundColor: theme.colors.success + "10" }]}>
-                    <Text style={[styles.amountLabel, { color: theme.colors.secondary }]}>Total Amount</Text>
-                    <Text style={[styles.amountValue, { color: theme.colors.success }]}>₹{product.totalAmount.toFixed(2)}</Text>
-                  </View>
-
-                  {/* Buyers - always show section with Add button */}
-                  <View style={[styles.buyersSection, { borderTopColor: theme.colors.border }]}>
-                    <View style={styles.buyersSectionHeader}>
-                      <Text style={[styles.buyersLabel, { color: theme.colors.secondary }]}>
-                        Buyers ({product.purchases.length})
-                      </Text>
-                      {product.remainingQuantity > 0 ? (
-                        <TouchableOpacity
-                          onPress={() => { setSelectedPatti(patti); handleAddBuyer(idx); }}
-                          style={[styles.addChipSmall, { backgroundColor: theme.colors.primary + "12" }]}
+                  {patti.products.map((product, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.productCard,
+                        { borderLeftColor: theme.colors.primary },
+                      ]}
+                    >
+                      <View style={styles.productHeader}>
+                        <Text
+                          style={[
+                            styles.productName,
+                            { color: theme.colors.primary },
+                          ]}
                         >
-                          <AntDesign name="plus" size={10} color={theme.colors.primary} />
-                          <Text style={[styles.addChipSmallText, { color: theme.colors.primary }]}>
-                            Add ({product.remainingQuantity} left)
-                          </Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={() => Alert.alert("Out of Stock", `All ${product.totalQuantity} bags have been sold. Increase the quantity first by editing the item if needed.`)}
-                          style={[styles.addChipSmall, { backgroundColor: theme.colors.danger + "12" }]}
-                        >
-                          <AntDesign name="warning" size={10} color={theme.colors.danger} />
-                          <Text style={[styles.addChipSmallText, { color: theme.colors.danger }]}>
-                            Out of Stock
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    {product.purchases.length === 0 && (
-                      <Text style={[styles.noBuyersText, { color: theme.colors.secondary }]}>
-                        No buyers yet. Tap "Add" to add a buyer.
-                      </Text>
-                    )}
-                    {product.purchases.map((purchase, pIdx) => (
-                      <View key={pIdx} style={[styles.buyerRow, { borderBottomColor: theme.colors.border }]}>
-                        <View style={styles.buyerInfo}>
-                          <Text style={[styles.buyerName, { color: theme.colors.text }]}>{purchase.buyerName}</Text>
-                          <Text style={[styles.buyerDetail, { color: theme.colors.secondary }]}>
-                            {purchase.quantity} bags @ ₹{purchase.rate} = ₹{purchase.totalAmount.toFixed(2)}
-                          </Text>
-                        </View>
-                        <View style={styles.buyerActions}>
+                          {product.productName}
+                        </Text>
+                        <View style={styles.productActions}>
                           <TouchableOpacity
-                            onPress={() => { setSelectedPatti(patti); handleEditBuyer(purchase, idx, pIdx); }}
-                            style={[styles.microBtn, { backgroundColor: theme.colors.warning + "12" }]}
+                            onPress={() => {
+                              setSelectedPatti(patti);
+                              handleEditItem(product, idx);
+                            }}
+                            style={[
+                              styles.tinyIconBtn,
+                              { backgroundColor: theme.colors.warning },
+                            ]}
                           >
-                            <AntDesign name="edit" size={10} color={theme.colors.warning} />
+                            <AntDesign name="edit" size={15} color="#fff" />
                           </TouchableOpacity>
                           <TouchableOpacity
-                            onPress={() => { setSelectedPatti(patti); handleDeleteBuyer(idx, pIdx); }}
-                            style={[styles.microBtn, { backgroundColor: theme.colors.danger + "12" }]}
+                            onPress={() => {
+                              setSelectedPatti(patti);
+                              handleDeleteItem(idx);
+                            }}
+                            style={[
+                              styles.tinyIconBtn,
+                              { backgroundColor: theme.colors.danger },
+                            ]}
                           >
-                            <AntDesign name="delete" size={10} color={theme.colors.danger} />
+                            <AntDesign name="delete" size={15} color="#fff" />
                           </TouchableOpacity>
                         </View>
                       </View>
-                    ))}
+
+                      <View style={styles.productStats}>
+                        <View style={styles.statPill}>
+                          <Text
+                            style={[
+                              styles.statPillLabel,
+                              { color: theme.colors.secondary },
+                            ]}
+                          >
+                            Total
+                          </Text>
+                          <Text
+                            style={[
+                              styles.statPillValue,
+                              { color: theme.colors.text },
+                            ]}
+                          >
+                            {product.totalQuantity}
+                          </Text>
+                        </View>
+                        <View style={styles.statPill}>
+                          <Text
+                            style={[
+                              styles.statPillLabel,
+                              { color: theme.colors.secondary },
+                            ]}
+                          >
+                            Sold
+                          </Text>
+                          <Text
+                            style={[
+                              styles.statPillValue,
+                              { color: theme.colors.warning },
+                            ]}
+                          >
+                            {product.totalQuantity - product.remainingQuantity}
+                          </Text>
+                        </View>
+                        <View style={styles.statPill}>
+                          <Text
+                            style={[
+                              styles.statPillLabel,
+                              { color: theme.colors.secondary },
+                            ]}
+                          >
+                            Left
+                          </Text>
+                          <Text
+                            style={[
+                              styles.statPillValue,
+                              {
+                                color:
+                                  product.remainingQuantity > 0
+                                    ? theme.colors.success
+                                    : theme.colors.danger,
+                              },
+                            ]}
+                          >
+                            {product.remainingQuantity}
+                          </Text>
+                        </View>
+                        <View style={styles.statPill}>
+                          <Text
+                            style={[
+                              styles.statPillLabel,
+                              { color: theme.colors.secondary },
+                            ]}
+                          >
+                            Rate
+                          </Text>
+                          <Text
+                            style={[
+                              styles.statPillValue,
+                              { color: theme.colors.text },
+                            ]}
+                          >
+                            ₹{product.rate}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Amount row */}
+                      <View
+                        style={[
+                          styles.amountRow,
+                          { backgroundColor: theme.colors.success + "10" },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.amountLabel,
+                            { color: theme.colors.secondary },
+                          ]}
+                        >
+                          Total Amount
+                        </Text>
+                        <Text
+                          style={[
+                            styles.amountValue,
+                            { color: theme.colors.success },
+                          ]}
+                        >
+                          ₹{product.totalAmount.toFixed(2)}
+                        </Text>
+                      </View>
+
+                      {/* Buyers section */}
+                      <View
+                        style={[
+                          styles.buyersSection,
+                          { borderTopColor: theme.colors.border },
+                        ]}
+                      >
+                        <View style={styles.buyersSectionHeader}>
+                          <Text
+                            style={[
+                              styles.buyersLabel,
+                              { color: theme.colors.secondary },
+                            ]}
+                          >
+                            Buyers ({product.purchases.length})
+                          </Text>
+                          {product.remainingQuantity > 0 ? (
+                            <TouchableOpacity
+                              onPress={() => {
+                                setSelectedPatti(patti);
+                                handleAddBuyer(idx);
+                              }}
+                              style={[
+                                styles.addChipSmall,
+                                { backgroundColor: theme.colors.primary },
+                              ]}
+                            >
+                              <AntDesign name="plus" size={11} color="#fff" />
+                              <Text
+                                style={[
+                                  styles.addChipSmallText,
+                                  { color: "#fff" },
+                                ]}
+                              >
+                                Add ({product.remainingQuantity} left)
+                              </Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              onPress={() =>
+                                Alert.alert(
+                                  "Out of Stock",
+                                  `All ${product.totalQuantity} bags have been sold. Increase the quantity first by editing the item if needed.`,
+                                )
+                              }
+                              style={[
+                                styles.addChipSmall,
+                                { backgroundColor: theme.colors.danger },
+                              ]}
+                            >
+                              <AntDesign
+                                name="warning"
+                                size={11}
+                                color="#fff"
+                              />
+                              <Text
+                                style={[
+                                  styles.addChipSmallText,
+                                  { color: "#fff" },
+                                ]}
+                              >
+                                Out of Stock
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        {product.purchases.length === 0 && (
+                          <Text
+                            style={[
+                              styles.noBuyersText,
+                              { color: theme.colors.secondary },
+                            ]}
+                          >
+                            No buyers yet. Tap "Add" to add a buyer.
+                          </Text>
+                        )}
+                        {product.purchases.map((purchase, pIdx) => (
+                          <View
+                            key={pIdx}
+                            style={[
+                              styles.buyerRow,
+                              { borderBottomColor: theme.colors.border },
+                            ]}
+                          >
+                            <View style={styles.buyerInfo}>
+                              <Text
+                                style={[
+                                  styles.buyerName,
+                                  { color: theme.colors.text },
+                                ]}
+                              >
+                                {purchase.buyerName}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.buyerDetail,
+                                  { color: theme.colors.secondary },
+                                ]}
+                              >
+                                {purchase.quantity} bags @ ₹{purchase.rate} = ₹
+                                {purchase.totalAmount.toFixed(2)}
+                              </Text>
+                            </View>
+                            <View style={styles.buyerActions}>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setSelectedPatti(patti);
+                                  handleEditBuyer(purchase, idx, pIdx);
+                                }}
+                                style={[
+                                  styles.microBtn,
+                                  { backgroundColor: theme.colors.warning },
+                                ]}
+                              >
+                                <AntDesign name="edit" size={13} color="#fff" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setSelectedPatti(patti);
+                                  handleDeleteBuyer(idx, pIdx);
+                                }}
+                                style={[
+                                  styles.microBtn,
+                                  { backgroundColor: theme.colors.danger },
+                                ]}
+                              >
+                                <AntDesign
+                                  name="delete"
+                                  size={13}
+                                  color="#fff"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+
+                  {/* Patti Summary */}
+                  <View
+                    style={[
+                      styles.summarySection,
+                      { borderTopColor: theme.colors.border },
+                    ]}
+                  >
+                    <View style={styles.summaryRow}>
+                      <Text
+                        style={[
+                          styles.summaryLabel,
+                          { color: theme.colors.secondary },
+                        ]}
+                      >
+                        Total Sales
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryValue,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        ₹{patti.totalPattiAmount.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text
+                        style={[
+                          styles.summaryLabel,
+                          { color: theme.colors.secondary },
+                        ]}
+                      >
+                        Commission ({patti.commissionPercentage}%)
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryValue,
+                          { color: theme.colors.danger },
+                        ]}
+                      >
+                        -₹{patti.commissionAmount.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text
+                        style={[
+                          styles.summaryLabel,
+                          { color: theme.colors.secondary },
+                        ]}
+                      >
+                        Hamalli
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryValue,
+                          { color: theme.colors.danger },
+                        ]}
+                      >
+                        -₹{patti.hamalliAmount.toFixed(2)}
+                      </Text>
+                    </View>
+                    {patti.lorryAmount > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text
+                          style={[
+                            styles.summaryLabel,
+                            { color: theme.colors.secondary },
+                          ]}
+                        >
+                          Lorry
+                        </Text>
+                        <Text
+                          style={[
+                            styles.summaryValue,
+                            { color: theme.colors.danger },
+                          ]}
+                        >
+                          -₹{patti.lorryAmount.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                    {patti.cashAmount > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text
+                          style={[
+                            styles.summaryLabel,
+                            { color: theme.colors.secondary },
+                          ]}
+                        >
+                          Cash
+                        </Text>
+                        <Text
+                          style={[
+                            styles.summaryValue,
+                            { color: theme.colors.danger },
+                          ]}
+                        >
+                          -₹{patti.cashAmount.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                    {patti.otherExpenses > 0 && (
+                      <View style={styles.summaryRow}>
+                        <Text
+                          style={[
+                            styles.summaryLabel,
+                            { color: theme.colors.secondary },
+                          ]}
+                        >
+                          Other
+                        </Text>
+                        <Text
+                          style={[
+                            styles.summaryValue,
+                            { color: theme.colors.danger },
+                          ]}
+                        >
+                          -₹{patti.otherExpenses.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                    <View
+                      style={[
+                        styles.finalRow,
+                        { borderTopColor: theme.colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.finalLabel,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        Final Payable
+                      </Text>
+                      <Text
+                        style={[
+                          styles.finalValue,
+                          { color: theme.colors.success },
+                        ]}
+                      >
+                        ₹{patti.finalPayableAmount.toFixed(2)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              ))}
+              )}
             </View>
-
-            {/* Summary */}
-            <View style={[styles.summarySection, { borderTopColor: theme.colors.border }]}>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.secondary }]}>Total Sales</Text>
-                <Text style={[styles.summaryValue, { color: theme.colors.text }]}>₹{patti.totalPattiAmount.toFixed(2)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.secondary }]}>Commission ({patti.commissionPercentage}%)</Text>
-                <Text style={[styles.summaryValue, { color: theme.colors.danger }]}>-₹{patti.commissionAmount.toFixed(2)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: theme.colors.secondary }]}>Hamalli</Text>
-                <Text style={[styles.summaryValue, { color: theme.colors.danger }]}>-₹{patti.hamalliAmount.toFixed(2)}</Text>
-              </View>
-              {patti.lorryAmount > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.secondary }]}>Lorry</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.danger }]}>-₹{patti.lorryAmount.toFixed(2)}</Text>
-                </View>
-              )}
-              {patti.cashAmount > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.secondary }]}>Cash</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.danger }]}>-₹{patti.cashAmount.toFixed(2)}</Text>
-                </View>
-              )}
-              {patti.otherExpenses > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.secondary }]}>Other</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.danger }]}>-₹{patti.otherExpenses.toFixed(2)}</Text>
-                </View>
-              )}
-              <View style={[styles.finalRow, { borderTopColor: theme.colors.border }]}>
-                <Text style={[styles.finalLabel, { color: theme.colors.text }]}>Final Payable</Text>
-                <Text style={[styles.finalValue, { color: theme.colors.success }]}>₹{patti.finalPayableAmount.toFixed(2)}</Text>
-              </View>
-            </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
     );
   };
@@ -656,39 +1134,123 @@ export default function ModifyRecords() {
           Legacy Allotments
         </Text>
         {dateAllotments.map((record) => (
-          <View key={record.id} style={[styles.recordCard, { backgroundColor: theme.colors.white, borderColor: theme.colors.border }]}>
+          <View
+            key={record.id}
+            style={[
+              styles.recordCard,
+              {
+                backgroundColor: theme.colors.white,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
             <View style={styles.recordHeader}>
               <View style={styles.farmerInfo}>
-                <View style={[styles.farmerAvatar, { backgroundColor: theme.colors.info + "15" }]}>
+                <View
+                  style={[
+                    styles.farmerAvatar,
+                    { backgroundColor: theme.colors.info + "15" },
+                  ]}
+                >
                   <AntDesign name="user" size={16} color={theme.colors.info} />
                 </View>
-                <Text style={[styles.farmerName, { color: theme.colors.text }]}>{record.farmerName}</Text>
+                <Text style={[styles.farmerName, { color: theme.colors.text }]}>
+                  {record.farmerName}
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => handleDeleteAllotment(record)} style={[styles.iconBtn, { backgroundColor: theme.colors.danger + "15" }]}>
-                <AntDesign name="delete" size={16} color={theme.colors.danger} />
+              <TouchableOpacity
+                onPress={() => handleDeleteAllotment(record)}
+                style={[
+                  styles.iconBtn,
+                  { backgroundColor: theme.colors.danger + "15" },
+                ]}
+              >
+                <AntDesign
+                  name="delete"
+                  size={16}
+                  color={theme.colors.danger}
+                />
               </TouchableOpacity>
             </View>
 
             <View style={styles.legacyGrid}>
               <View style={styles.legacyItem}>
-                <Text style={[styles.legacyLabel, { color: theme.colors.secondary }]}>Product</Text>
-                <Text style={[styles.legacyValue, { color: theme.colors.text }]}>{record.productName}</Text>
+                <Text
+                  style={[
+                    styles.legacyLabel,
+                    { color: theme.colors.secondary },
+                  ]}
+                >
+                  Product
+                </Text>
+                <Text
+                  style={[styles.legacyValue, { color: theme.colors.text }]}
+                >
+                  {record.productName}
+                </Text>
               </View>
               <View style={styles.legacyItem}>
-                <Text style={[styles.legacyLabel, { color: theme.colors.secondary }]}>Buyer</Text>
-                <Text style={[styles.legacyValue, { color: theme.colors.text }]}>{record.customerName}</Text>
+                <Text
+                  style={[
+                    styles.legacyLabel,
+                    { color: theme.colors.secondary },
+                  ]}
+                >
+                  Buyer
+                </Text>
+                <Text
+                  style={[styles.legacyValue, { color: theme.colors.text }]}
+                >
+                  {record.customerName}
+                </Text>
               </View>
               <View style={styles.legacyItem}>
-                <Text style={[styles.legacyLabel, { color: theme.colors.secondary }]}>Qty</Text>
-                <Text style={[styles.legacyValue, { color: theme.colors.text }]}>{record.bagQuantity} bags</Text>
+                <Text
+                  style={[
+                    styles.legacyLabel,
+                    { color: theme.colors.secondary },
+                  ]}
+                >
+                  Qty
+                </Text>
+                <Text
+                  style={[styles.legacyValue, { color: theme.colors.text }]}
+                >
+                  {record.bagQuantity} bags
+                </Text>
               </View>
               <View style={styles.legacyItem}>
-                <Text style={[styles.legacyLabel, { color: theme.colors.secondary }]}>Rate</Text>
-                <Text style={[styles.legacyValue, { color: theme.colors.text }]}>₹{record.rate}</Text>
+                <Text
+                  style={[
+                    styles.legacyLabel,
+                    { color: theme.colors.secondary },
+                  ]}
+                >
+                  Rate
+                </Text>
+                <Text
+                  style={[styles.legacyValue, { color: theme.colors.text }]}
+                >
+                  ₹{record.rate}
+                </Text>
               </View>
               <View style={[styles.legacyItem, { flex: 1 }]}>
-                <Text style={[styles.legacyLabel, { color: theme.colors.secondary }]}>Total</Text>
-                <Text style={[styles.legacyValue, { color: theme.colors.success, fontWeight: "700" }]}>₹{record.totalAmount.toFixed(2)}</Text>
+                <Text
+                  style={[
+                    styles.legacyLabel,
+                    { color: theme.colors.secondary },
+                  ]}
+                >
+                  Total
+                </Text>
+                <Text
+                  style={[
+                    styles.legacyValue,
+                    { color: theme.colors.success, fontWeight: "700" },
+                  ]}
+                >
+                  ₹{record.totalAmount.toFixed(2)}
+                </Text>
               </View>
             </View>
           </View>
@@ -715,34 +1277,54 @@ export default function ModifyRecords() {
         },
       ]}
     >
-      <ScrollView style={styles.editForm}>
-        <View style={styles.formGroup}>
-          <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Farmer Name</Text>
-          <TextInput
-            style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
-            value={editForm.farmerName}
-            onChangeText={(text) => setEditForm({ ...editForm, farmerName: text })}
-            placeholder="Farmer name"
-          />
-        </View>
+      <ScrollView style={styles.editForm} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+        <SearchableInput
+          label="Farmer Name"
+          value={editForm.farmerName}
+          onChangeText={(text) => setEditForm({ ...editForm, farmerName: text })}
+          onSelect={(name) => setEditForm({ ...editForm, farmerName: name })}
+          options={FarmerService.getAllNames()}
+          placeholder="Search farmer..."
+          allowNew={false}
+        />
 
         <View style={styles.formRow}>
           <View style={styles.formCol}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Commission %</Text>
+            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>
+              Commission %
+            </Text>
             <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
+              style={[
+                styles.formInput,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.light,
+                },
+              ]}
               value={editForm.commissionPercentage}
-              onChangeText={(text) => setEditForm({ ...editForm, commissionPercentage: text })}
+              onChangeText={(text) =>
+                setEditForm({ ...editForm, commissionPercentage: text })
+              }
               keyboardType="numeric"
               placeholder="0"
             />
           </View>
           <View style={styles.formCol}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Hamalli/Bag ₹</Text>
+            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>
+              Hamalli/Bag ₹
+            </Text>
             <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
+              style={[
+                styles.formInput,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.light,
+                },
+              ]}
               value={editForm.hamalliPerBag}
-              onChangeText={(text) => setEditForm({ ...editForm, hamalliPerBag: text })}
+              onChangeText={(text) =>
+                setEditForm({ ...editForm, hamalliPerBag: text })
+              }
               keyboardType="numeric"
               placeholder="0"
             />
@@ -751,21 +1333,41 @@ export default function ModifyRecords() {
 
         <View style={styles.formRow}>
           <View style={styles.formCol}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Lorry ₹</Text>
+            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>
+              Lorry ₹
+            </Text>
             <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
+              style={[
+                styles.formInput,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.light,
+                },
+              ]}
               value={editForm.lorryAmount}
-              onChangeText={(text) => setEditForm({ ...editForm, lorryAmount: text })}
+              onChangeText={(text) =>
+                setEditForm({ ...editForm, lorryAmount: text })
+              }
               keyboardType="numeric"
               placeholder="0"
             />
           </View>
           <View style={styles.formCol}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Cash ₹</Text>
+            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>
+              Cash ₹
+            </Text>
             <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
+              style={[
+                styles.formInput,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.light,
+                },
+              ]}
               value={editForm.cashAmount}
-              onChangeText={(text) => setEditForm({ ...editForm, cashAmount: text })}
+              onChangeText={(text) =>
+                setEditForm({ ...editForm, cashAmount: text })
+              }
               keyboardType="numeric"
               placeholder="0"
             />
@@ -773,11 +1375,21 @@ export default function ModifyRecords() {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Other Expenses ₹</Text>
+          <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>
+            Other Expenses ₹
+          </Text>
           <TextInput
-            style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
+            style={[
+              styles.formInput,
+              {
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.light,
+              },
+            ]}
             value={editForm.otherExpenses}
-            onChangeText={(text) => setEditForm({ ...editForm, otherExpenses: text })}
+            onChangeText={(text) =>
+              setEditForm({ ...editForm, otherExpenses: text })
+            }
             keyboardType="numeric"
             placeholder="0"
           />
@@ -786,78 +1398,168 @@ export default function ModifyRecords() {
     </Modal>
   );
 
-  const renderItemModal = () => (
-    <Modal
-      visible={showItemModal}
-      onClose={() => setShowItemModal(false)}
-      title={selectedProductIndex === -1 ? "Add Item" : "Edit Item"}
-      actions={[
-        {
-          label: "Cancel",
-          onPress: () => setShowItemModal(false),
-          variant: "secondary",
-        },
-        {
-          label: "Save",
-          onPress: saveItemChanges,
-          variant: "success",
-        },
-      ]}
-    >
-      <ScrollView style={styles.editForm}>
-        <View style={styles.formGroup}>
-          <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Product Name</Text>
-          <TextInput
-            style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
+  const renderItemModal = () => {
+    const productLabels = DynamicProductService.getAllLabelsIncludingLegacy();
+    const qty = parseFloat(itemForm.totalQuantity) || 0;
+    const rate = parseFloat(itemForm.rate) || 0;
+    const weight = parseFloat(itemForm.weight) || 0;
+    const estimatedAmount =
+      selectedItemUnit > 0 ? (weight * qty * rate) / 100 : qty * rate;
+
+    return (
+      <Modal
+        visible={showItemModal}
+        onClose={() => setShowItemModal(false)}
+        title={selectedProductIndex === -1 ? "Add Item" : "Edit Item"}
+        actions={[
+          {
+            label: "Cancel",
+            onPress: () => setShowItemModal(false),
+            variant: "secondary",
+          },
+          {
+            label: "Save",
+            onPress: saveItemChanges,
+            variant: "success",
+          },
+        ]}
+      >
+        <ScrollView
+          style={styles.editForm}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+          {/* Product Name — searchable dropdown */}
+          <SearchableInput
+            label="Product Name:"
             value={itemForm.productName}
-            onChangeText={(text) => setItemForm({ ...itemForm, productName: text })}
-            placeholder="e.g., Wheat"
+            onChangeText={(text) => {
+              setItemForm({ ...itemForm, productName: text });
+              setSelectedItemUnit(DynamicProductService.getUnitByLabel(text));
+            }}
+            onSelect={(name) => {
+              setItemForm({ ...itemForm, productName: name });
+              setSelectedItemUnit(DynamicProductService.getUnitByLabel(name));
+            }}
+            onAddNew={(name) => {
+              DynamicProductService.findOrCreate(name);
+              setItemForm({ ...itemForm, productName: name });
+              setSelectedItemUnit(0);
+            }}
+            options={productLabels}
+            placeholder="Type to search or add product"
           />
-        </View>
 
-        <View style={styles.formRow}>
-          <View style={styles.formCol}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Qty (bags)</Text>
+          {/* Qty + Weight (only when unit > 0) */}
+          <View style={styles.formRow}>
+            <View style={styles.formCol}>
+              <Text
+                style={[styles.formLabel, { color: theme.colors.secondary }]}
+              >
+                Qty (bags)
+              </Text>
+              <TextInput
+                style={[
+                  styles.formInput,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.light,
+                  },
+                ]}
+                value={itemForm.totalQuantity}
+                onChangeText={(text) =>
+                  setItemForm({ ...itemForm, totalQuantity: text })
+                }
+                keyboardType="numeric"
+                placeholder="0"
+              />
+            </View>
+            {selectedItemUnit > 0 && (
+              <View style={styles.formCol}>
+                <Text
+                  style={[styles.formLabel, { color: theme.colors.secondary }]}
+                >
+                  Weight (kg)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.formInput,
+                    {
+                      borderColor: theme.colors.border,
+                      backgroundColor: theme.colors.light,
+                    },
+                  ]}
+                  value={itemForm.weight}
+                  onChangeText={(text) =>
+                    setItemForm({ ...itemForm, weight: text })
+                  }
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </View>
+            )}
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>
+              Rate ₹
+            </Text>
             <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
-              value={itemForm.totalQuantity}
-              onChangeText={(text) => setItemForm({ ...itemForm, totalQuantity: text })}
+              style={[
+                styles.formInput,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.light,
+                },
+              ]}
+              value={itemForm.rate}
+              onChangeText={(text) =>
+                setItemForm({ ...itemForm, rate: text })
+              }
               keyboardType="numeric"
               placeholder="0"
             />
           </View>
-          <View style={styles.formCol}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Weight (kg)</Text>
-            <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
-              value={itemForm.weight}
-              onChangeText={(text) => setItemForm({ ...itemForm, weight: text })}
-              keyboardType="numeric"
-              placeholder="0"
-            />
-          </View>
-        </View>
 
-        <View style={styles.formGroup}>
-          <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Rate ₹</Text>
-          <TextInput
-            style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
-            value={itemForm.rate}
-            onChangeText={(text) => setItemForm({ ...itemForm, rate: text })}
-            keyboardType="numeric"
-            placeholder="0"
-          />
-        </View>
-      </ScrollView>
-    </Modal>
-  );
+          {/* Live amount preview */}
+          {qty > 0 && rate > 0 && (
+            <View
+              style={[
+                styles.autoCalcBox,
+                {
+                  backgroundColor: theme.colors.success + "10",
+                  borderColor: theme.colors.success + "30",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.autoCalcLabel, { color: theme.colors.secondary }]}
+              >
+                {selectedItemUnit > 0
+                  ? `(${qty}×${weight}kg×₹${rate})÷100`
+                  : `${qty} bags × ₹${rate}`}
+              </Text>
+              <Text
+                style={[styles.autoCalcValue, { color: theme.colors.success }]}
+              >
+                ₹{estimatedAmount.toFixed(2)}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </Modal>
+    );
+  };
 
   const renderBuyerModal = () => {
-    const product = selectedPatti && selectedProductIndex >= 0
-      ? selectedPatti.products[selectedProductIndex]
-      : null;
+    const product =
+      selectedPatti && selectedProductIndex >= 0
+        ? selectedPatti.products[selectedProductIndex]
+        : null;
     const qty = parseFloat(buyerForm.quantity) || 0;
-    const autoAmount = product ? calcPurchaseAmount(product, qty, product.rate) : 0;
+    const autoAmount = product
+      ? calcPurchaseAmount(product, qty, product.rate)
+      : 0;
     const soldByOthers = product
       ? product.purchases.reduce((sum, p, i) => {
           if (selectedBuyerIndex !== -1 && i === selectedBuyerIndex) return sum;
@@ -884,36 +1586,75 @@ export default function ModifyRecords() {
           },
         ]}
       >
-        <ScrollView style={styles.editForm}>
+        <ScrollView style={styles.editForm} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           {/* Product info banner */}
           {product && (
-            <View style={[styles.modalInfoBanner, { backgroundColor: theme.colors.primary + "10", borderColor: theme.colors.primary + "30" }]}>
-              <Text style={[styles.modalInfoTitle, { color: theme.colors.primary }]}>{product.productName}</Text>
+            <View
+              style={[
+                styles.modalInfoBanner,
+                {
+                  backgroundColor: theme.colors.primary + "10",
+                  borderColor: theme.colors.primary + "30",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.modalInfoTitle, { color: theme.colors.primary }]}
+              >
+                {product.productName}
+              </Text>
               <View style={styles.modalInfoRow}>
-                <Text style={[styles.modalInfoText, { color: theme.colors.secondary }]}>Rate: ₹{product.rate}</Text>
-                <Text style={[styles.modalInfoText, { color: available > 0 ? theme.colors.success : theme.colors.danger }]}>
+                <Text
+                  style={[
+                    styles.modalInfoText,
+                    { color: theme.colors.secondary },
+                  ]}
+                >
+                  Rate: ₹{product.rate}
+                </Text>
+                <Text
+                  style={[
+                    styles.modalInfoText,
+                    {
+                      color:
+                        available > 0
+                          ? theme.colors.success
+                          : theme.colors.danger,
+                    },
+                  ]}
+                >
                   Available: {available} bags
                 </Text>
               </View>
             </View>
           )}
 
-          <View style={styles.formGroup}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Buyer Name</Text>
-            <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
-              value={buyerForm.buyerName}
-              onChangeText={(text) => setBuyerForm({ ...buyerForm, buyerName: text })}
-              placeholder="e.g., John Doe"
-            />
-          </View>
+          <SearchableInput
+            label="Buyer Name"
+            value={buyerForm.buyerName}
+            onChangeText={(text) => setBuyerForm({ ...buyerForm, buyerName: text })}
+            onSelect={(name) => setBuyerForm({ ...buyerForm, buyerName: name })}
+            options={BuyerService.getAllNames()}
+            placeholder="Search or type buyer name..."
+            allowNew={false}
+          />
 
           <View style={styles.formGroup}>
-            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>Quantity (bags)</Text>
+            <Text style={[styles.formLabel, { color: theme.colors.secondary }]}>
+              Quantity (bags)
+            </Text>
             <TextInput
-              style={[styles.formInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.light }]}
+              style={[
+                styles.formInput,
+                {
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.light,
+                },
+              ]}
               value={buyerForm.quantity}
-              onChangeText={(text) => setBuyerForm({ ...buyerForm, quantity: text })}
+              onChangeText={(text) =>
+                setBuyerForm({ ...buyerForm, quantity: text })
+              }
               keyboardType="numeric"
               placeholder={`Max ${available} bags`}
             />
@@ -921,9 +1662,28 @@ export default function ModifyRecords() {
 
           {/* Auto-calculated amount */}
           {qty > 0 && product && (
-            <View style={[styles.autoCalcBox, { backgroundColor: theme.colors.success + "10", borderColor: theme.colors.success + "30" }]}>
-              <Text style={[styles.autoCalcLabel, { color: theme.colors.secondary }]}>Amount (auto)</Text>
-              <Text style={[styles.autoCalcValue, { color: theme.colors.success }]}>₹{autoAmount.toFixed(2)}</Text>
+            <View
+              style={[
+                styles.autoCalcBox,
+                {
+                  backgroundColor: theme.colors.success + "10",
+                  borderColor: theme.colors.success + "30",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.autoCalcLabel,
+                  { color: theme.colors.secondary },
+                ]}
+              >
+                Amount (auto)
+              </Text>
+              <Text
+                style={[styles.autoCalcValue, { color: theme.colors.success }]}
+              >
+                ₹{autoAmount.toFixed(2)}
+              </Text>
             </View>
           )}
         </ScrollView>
@@ -939,8 +1699,12 @@ export default function ModifyRecords() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Modify Records</Text>
-        <Text style={[styles.headerSub, { color: theme.colors.secondary }]}>Edit or delete your patti records</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+          Modify Records
+        </Text>
+        <Text style={[styles.headerSub, { color: theme.colors.secondary }]}>
+          Edit or delete your patti records
+        </Text>
       </View>
 
       {renderDateList()}
@@ -1072,21 +1836,54 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: "row",
-    gap: 6,
+    gap: 10,
+    alignItems: "center",
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   tinyIconBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 0,
+  },
+  farmerSubtitle: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  addProductBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 5,
+  },
+  addProductBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
   },
   productsContainer: {
     paddingHorizontal: 16,
@@ -1148,7 +1945,7 @@ const styles = StyleSheet.create({
   },
   productActions: {
     flexDirection: "row",
-    gap: 4,
+    gap: 8,
   },
   productStats: {
     flexDirection: "row",
@@ -1233,12 +2030,12 @@ const styles = StyleSheet.create({
   },
   buyerActions: {
     flexDirection: "row",
-    gap: 4,
+    gap: 8,
   },
   microBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },
